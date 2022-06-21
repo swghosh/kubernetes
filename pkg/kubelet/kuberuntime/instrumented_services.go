@@ -149,6 +149,16 @@ func (in instrumentedRuntimeService) ReopenContainerLog(containerID string) erro
 	return err
 }
 
+func (in instrumentedRuntimeService) GetContainerEvents(containerEventsCh chan *runtimeapi.ContainerEventResponse) error {
+	const operation = "get_container_events"
+	defer recordOperation(operation, time.Now())
+
+	err := in.service.GetContainerEvents(containerEventsCh)
+	recordError(operation, err)
+	return err
+
+}
+
 func (in instrumentedRuntimeService) ExecSync(containerID string, cmd []string, timeout time.Duration) ([]byte, []byte, error) {
 	const operation = "exec_sync"
 	defer recordOperation(operation, time.Now())

@@ -68,41 +68,41 @@ func NewRawContainerWatcher() (watcher.ContainerWatcher, error) {
 
 func (w *rawContainerWatcher) Start(events chan watcher.ContainerEvent) error {
 	// Watch this container (all its cgroups) and all subdirectories.
-	watched := make([]string, 0)
-	for _, cgroupPath := range w.cgroupPaths {
-		_, err := w.watchDirectory(events, cgroupPath, "/")
-		if err != nil {
-			for _, watchedCgroupPath := range watched {
-				_, removeErr := w.watcher.RemoveWatch("/", watchedCgroupPath)
-				if removeErr != nil {
-					klog.Warningf("Failed to remove inotify watch for %q with error: %v", watchedCgroupPath, removeErr)
-				}
-			}
-			return err
-		}
-		watched = append(watched, cgroupPath)
-	}
+	// watched := make([]string, 0)
+	// for _, cgroupPath := range w.cgroupPaths {
+	// 	_, err := w.watchDirectory(events, cgroupPath, "/")
+	// 	if err != nil {
+	// 		for _, watchedCgroupPath := range watched {
+	// 			_, removeErr := w.watcher.RemoveWatch("/", watchedCgroupPath)
+	// 			if removeErr != nil {
+	// 				klog.Warningf("Failed to remove inotify watch for %q with error: %v", watchedCgroupPath, removeErr)
+	// 			}
+	// 		}
+	// 		return err
+	// 	}
+	// 	watched = append(watched, cgroupPath)
+	// }
 
-	// Process the events received from the kernel.
-	go func() {
-		for {
-			select {
-			case event := <-w.watcher.Event():
-				err := w.processEvent(event, events)
-				if err != nil {
-					klog.Warningf("Error while processing event (%+v): %v", event, err)
-				}
-			case err := <-w.watcher.Error():
-				klog.Warningf("Error while watching %q: %v", "/", err)
-			case <-w.stopWatcher:
-				err := w.watcher.Close()
-				if err == nil {
-					w.stopWatcher <- err
-					return
-				}
-			}
-		}
-	}()
+	// // Process the events received from the kernel.
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case event := <-w.watcher.Event():
+	// 			err := w.processEvent(event, events)
+	// 			if err != nil {
+	// 				klog.Warningf("Error while processing event (%+v): %v", event, err)
+	// 			}
+	// 		case err := <-w.watcher.Error():
+	// 			klog.Warningf("Error while watching %q: %v", "/", err)
+	// 		case <-w.stopWatcher:
+	// 			err := w.watcher.Close()
+	// 			if err == nil {
+	// 				w.stopWatcher <- err
+	// 				return
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	return nil
 }

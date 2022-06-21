@@ -322,3 +322,7 @@ func (f *RemoteRuntime) ReopenContainerLog(ctx context.Context, req *kubeapi.Reo
 
 	return &kubeapi.ReopenContainerLogResponse{}, nil
 }
+
+func (f *RemoteRuntime) GetContainerEvents(req *kubeapi.GetEventsRequest, ces kubeapi.RuntimeService_GetContainerEventsServer) error {
+	return nil
+}

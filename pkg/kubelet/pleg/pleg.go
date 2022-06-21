@@ -24,6 +24,8 @@ import (
 type PodLifeCycleEventType string
 
 const (
+	// ContainerCreated - event type when the new state of container is created.
+	ContainerCreated PodLifeCycleEventType = "ContainerCreated"
 	// ContainerStarted - event type when the new state of container is running.
 	ContainerStarted PodLifeCycleEventType = "ContainerStarted"
 	// ContainerDied - event type when the new state of container is exited.

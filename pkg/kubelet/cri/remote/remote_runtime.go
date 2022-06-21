@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -1147,5 +1148,63 @@ func (r *remoteRuntimeService) ReopenContainerLog(containerID string) (err error
 	}
 
 	klog.V(10).InfoS("[RemoteRuntimeService] ReopenContainerLog Response", "containerID", containerID)
+	return nil
+}
+
+func (r *remoteRuntimeService) GetContainerEvents(containerEventsCh chan *runtimeapi.ContainerEventResponse) error {
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+
+	done := make(chan bool)
+	if r.useV1API() {
+		containerEventsStreamingClient, err := r.runtimeClient.GetContainerEvents(ctx, &runtimeapi.GetEventsRequest{})
+		if err != nil {
+			klog.ErrorS(err, "GetContainerEvents failed to get streaming client")
+			return err
+		}
+
+		go func() {
+			for {
+				resp, err := containerEventsStreamingClient.Recv()
+				if err == io.EOF {
+					done <- true
+					return
+				}
+				if err != nil {
+					klog.ErrorS(err, "cannot receive Container Event")
+				}
+				if resp != nil {
+					containerEventsCh <- resp
+					klog.V(2).InfoS("Container Event received", "resp", resp)
+				}
+			}
+		}()
+
+	}
+	//  else {
+	// 	containerEventsStreamingClient, err := r.runtimeClientV1alpha2.GetContainerEvents(ctx, &v1alpha2.GetEventsRequest{})
+	// 	if err != nil {
+	// 		klog.ErrorS(err, "GetContainerEvents failed to get streaming client")
+	// 		return err
+	// 	}
+
+	// 	go func() {
+	// 		for {
+	// 			resp, err := containerEventsStreamingClient.Recv()
+	// 			if err == io.EOF {
+	// 				done <- true
+	// 				return
+	// 			}
+	// 			if err != nil {
+	// 				klog.ErrorS(err, "cannot receive Container Event")
+	// 			}
+	// 			klog.V(2).InfoS("Container Event received", "resp", resp)
+	// 		}
+	// 	}()
+	// }
+
+	<-done //we will wait until all response is received
+	klog.V(2).Info("finished recieving container events")
+
 	return nil
 }
