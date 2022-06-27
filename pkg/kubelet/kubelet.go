@@ -35,8 +35,6 @@ import (
 	"github.com/opencontainers/selinux/go-selinux"
 	"k8s.io/client-go/informers"
 
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
-
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	libcontaineruserns "github.com/opencontainers/runc/libcontainer/userns"
 	"k8s.io/mount-utils"
@@ -681,6 +679,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
 	if _, err := klet.updatePodCIDR(kubeCfg.PodCIDR); err != nil {
@@ -1038,6 +1038,9 @@ type Kubelet struct {
 
 	// Generates pod events.
 	pleg pleg.PodLifecycleEventGenerator
+
+	// Evented PLEG
+	eventedPleg pleg.PodLifecycleEventGenerator
 
 	// Store kubecontainer.PodStatus for all pods.
 	podCache kubecontainer.Cache
@@ -1448,39 +1451,10 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		kl.runtimeClassManager.Start(wait.NeverStop)
 	}
 
-	wg := wait.Group{}
-	wg.Start(kl.getContainerEvents) // TODO: start like kl.statusManager.Start()
-
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
+	kl.eventedPleg.Start()
 	kl.syncLoop(updates, kl)
-
-	wg.Wait()
-}
-
-func (kl *Kubelet) getContainerEvents() {
-	containerEventsResponseCh := make(chan *runtimeapi.ContainerEventResponse, 1000)
-	defer close(containerEventsResponseCh)
-	go kl.runtimeService.GetContainerEvents(containerEventsResponseCh)
-
-	plegCh := kl.pleg.Watch()
-
-	for event := range containerEventsResponseCh {
-		switch event.ContainerEventType {
-		case runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT:
-			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
-			// Push the event to PLEG channel
-			plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerDied, Data: event.ContainerId}
-		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
-			// Push the event to PLEG channel
-			plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerCreated, Data: event.ContainerId}
-			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
-		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
-			// Push the event to PLEG channel
-			plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerStarted, Data: event.ContainerId}
-			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
-		}
-	}
 
 }
 
