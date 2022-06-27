@@ -158,7 +158,7 @@ const (
 	// Note that even though we set the period to 1s, the relisting itself can
 	// take more than 1s to finish if the container runtime responds slowly
 	// and/or when there are many container changes in one cycle.
-	plegRelistPeriod = time.Second * 1
+	plegRelistPeriod = time.Second * 60
 
 	// backOffPeriod is the period to back off when pod syncing results in an
 	// error. It is also used as the base period for the exponential backoff
@@ -679,7 +679,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
-	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)

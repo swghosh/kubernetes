@@ -36,6 +36,9 @@ type EventedPLEG struct {
 	runtime kubecontainer.Runtime
 
 	runtimeService internalapi.RuntimeService
+
+	genericPLEG PodLifecycleEventGenerator
+
 	// The channel from which the subscriber listens events.
 	eventChannel chan *PodLifecycleEvent
 	// The internal cache for pod/container information.
@@ -52,12 +55,13 @@ type EventedPLEG struct {
 }
 
 // NewGenericPLEG instantiates a new GenericPLEG object and return it.
-func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, channelCapacity int,
+func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, genericPLEG PodLifecycleEventGenerator, channelCapacity int,
 	relistPeriod time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
 	return &EventedPLEG{
 		relistPeriod:   relistPeriod,
 		runtime:        runtime,
 		runtimeService: runtimeService,
+		genericPLEG:    genericPLEG,
 		eventChannel:   make(chan *PodLifecycleEvent, channelCapacity),
 		podRecords:     make(podRecords),
 		cache:          cache,
@@ -69,7 +73,7 @@ func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.Ru
 // events.
 // TODO: support multiple subscribers.
 func (e *EventedPLEG) Watch() chan *PodLifecycleEvent {
-	return e.eventChannel
+	return e.genericPLEG.Watch()
 }
 
 // Start spawns a goroutine to relist periodically.
@@ -79,8 +83,12 @@ func (e *EventedPLEG) Start() {
 
 // Healthy check if PLEG work properly.
 // relistThreshold is the maximum interval between two relist.
-func (g *EventedPLEG) Healthy() (bool, error) {
+func (e *EventedPLEG) Healthy() (bool, error) {
 	return true, nil
+}
+
+func (e *EventedPLEG) ProcessEventsByPodID(eventsByPodID map[types.UID][]*PodLifecycleEvent) (needsReinspection map[types.UID]*kubecontainer.Pod) {
+	return e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
 }
 
 func (e *EventedPLEG) watchEventsChannel() {
@@ -89,21 +97,39 @@ func (e *EventedPLEG) watchEventsChannel() {
 	defer close(containerEventsResponseCh)
 	go e.runtimeService.GetContainerEvents(containerEventsResponseCh)
 
-	// plegCh := kl.pleg.Watch()
+	// plegCh := e.genericPLEG.Watch()
 
 	for event := range containerEventsResponseCh {
 		switch event.ContainerEventType {
 		case runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT:
-			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 			// Push the event to PLEG channel
-			// plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerDied, Data: event.ContainerId}
+			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerDied, Data: event.ContainerId}
+			// plegCh <- podLifecycleEvent
+			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
+			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
+
+			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
+
+			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
 			// Push the event to PLEG channel
-			// plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerCreated, Data: event.ContainerId}
+			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerCreated, Data: event.ContainerId}
+			// plegCh <- podLifecycleEvent
+			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
+			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
+
+			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
+
 			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
 			// Push the event to PLEG channel
-			// plegCh <- &pleg.PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: pleg.ContainerStarted, Data: event.ContainerId}
+			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerStarted, Data: event.ContainerId}
+			// plegCh <- podLifecycleEvent
+			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
+			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
+
+			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
+
 			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
 		}
 	}

@@ -228,7 +228,7 @@ func (g *GenericPLEG) relist() {
 		}
 	}
 
-	needsReinspection := g.processEventsByPodID(eventsByPodID)
+	needsReinspection := g.ProcessEventsByPodID(eventsByPodID)
 
 	if g.cacheEnabled() {
 		// reinspect any pods that failed inspection during the previous relist
@@ -252,7 +252,7 @@ func (g *GenericPLEG) relist() {
 	g.podsToReinspect = needsReinspection
 }
 
-func (g *GenericPLEG) processEventsByPodID(eventsByPodID map[types.UID][]*PodLifecycleEvent) (needsReinspection map[types.UID]*kubecontainer.Pod) {
+func (g *GenericPLEG) ProcessEventsByPodID(eventsByPodID map[types.UID][]*PodLifecycleEvent) (needsReinspection map[types.UID]*kubecontainer.Pod) {
 
 	if g.cacheEnabled() {
 		needsReinspection = make(map[types.UID]*kubecontainer.Pod)
