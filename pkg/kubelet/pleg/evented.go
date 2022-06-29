@@ -87,8 +87,8 @@ func (e *EventedPLEG) Healthy() (bool, error) {
 	return true, nil
 }
 
-func (e *EventedPLEG) ProcessEventsByPodID(eventsByPodID map[types.UID][]*PodLifecycleEvent) (needsReinspection map[types.UID]*kubecontainer.Pod) {
-	return e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
+func (e *EventedPLEG) Relist() {
+	e.genericPLEG.Relist()
 }
 
 func (e *EventedPLEG) watchEventsChannel() {
@@ -97,40 +97,20 @@ func (e *EventedPLEG) watchEventsChannel() {
 	defer close(containerEventsResponseCh)
 	go e.runtimeService.GetContainerEvents(containerEventsResponseCh)
 
-	// plegCh := e.genericPLEG.Watch()
-
 	for event := range containerEventsResponseCh {
 		switch event.ContainerEventType {
 		case runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT:
-			// Push the event to PLEG channel
-			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerDied, Data: event.ContainerId}
-			// plegCh <- podLifecycleEvent
-			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
-			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
-
-			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
-
+			e.Relist()
 			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
-			// Push the event to PLEG channel
-			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerCreated, Data: event.ContainerId}
-			// plegCh <- podLifecycleEvent
-			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
-			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
-
-			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
-
+			e.Relist()
 			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
-			// Push the event to PLEG channel
-			podLifecycleEvent := &PodLifecycleEvent{ID: types.UID(event.SandboxId), Type: ContainerStarted, Data: event.ContainerId}
-			// plegCh <- podLifecycleEvent
-			eventsByPodID := map[types.UID][]*PodLifecycleEvent{}
-			eventsByPodID[types.UID(event.SandboxId)] = append(eventsByPodID[types.UID(event.SandboxId)], podLifecycleEvent)
-
-			e.genericPLEG.ProcessEventsByPodID(eventsByPodID)
-
+			e.Relist()
 			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
+		case runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT:
+			e.Relist()
+			klog.V(2).InfoS("Recieved Container Deleted Event", "CRI container event", event)
 		}
 	}
 }

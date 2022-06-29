@@ -128,7 +128,7 @@ func (g *GenericPLEG) Watch() chan *PodLifecycleEvent {
 
 // Start spawns a goroutine to relist periodically.
 func (g *GenericPLEG) Start() {
-	go wait.Until(g.relist, g.relistPeriod, wait.NeverStop)
+	go wait.Until(g.Relist, g.relistPeriod, wait.NeverStop)
 }
 
 // Healthy check if PLEG work properly.
@@ -187,7 +187,7 @@ func (g *GenericPLEG) updateRelistTime(timestamp time.Time) {
 
 // relist queries the container runtime for list of pods/containers, compare
 // with the internal pods/containers, and generates events accordingly.
-func (g *GenericPLEG) relist() {
+func (g *GenericPLEG) Relist() {
 	klog.V(5).InfoS("GenericPLEG: Relisting")
 
 	if lastRelistTime := g.getRelistTime(); !lastRelistTime.IsZero() {
@@ -228,32 +228,7 @@ func (g *GenericPLEG) relist() {
 		}
 	}
 
-	needsReinspection := g.ProcessEventsByPodID(eventsByPodID)
-
-	if g.cacheEnabled() {
-		// reinspect any pods that failed inspection during the previous relist
-		if len(g.podsToReinspect) > 0 {
-			klog.V(5).InfoS("GenericPLEG: Reinspecting pods that previously failed inspection")
-			for pid, pod := range g.podsToReinspect {
-				if err := g.updateCache(pod, pid); err != nil {
-					// Rely on updateCache calling GetPodStatus to log the actual error.
-					klog.V(5).ErrorS(err, "PLEG: pod failed reinspection", "pod", klog.KRef(pod.Namespace, pod.Name))
-					needsReinspection[pid] = pod
-				}
-			}
-		}
-
-		// Update the cache timestamp.  This needs to happen *after*
-		// all pods have been properly updated in the cache.
-		g.cache.UpdateTime(timestamp)
-	}
-
-	// make sure we retain the list of pods that need reinspecting the next time relist is called
-	g.podsToReinspect = needsReinspection
-}
-
-func (g *GenericPLEG) ProcessEventsByPodID(eventsByPodID map[types.UID][]*PodLifecycleEvent) (needsReinspection map[types.UID]*kubecontainer.Pod) {
-
+	var needsReinspection map[types.UID]*kubecontainer.Pod
 	if g.cacheEnabled() {
 		needsReinspection = make(map[types.UID]*kubecontainer.Pod)
 	}
@@ -324,7 +299,27 @@ func (g *GenericPLEG) ProcessEventsByPodID(eventsByPodID map[types.UID][]*PodLif
 			}
 		}
 	}
-	return needsReinspection
+
+	if g.cacheEnabled() {
+		// reinspect any pods that failed inspection during the previous relist
+		if len(g.podsToReinspect) > 0 {
+			klog.V(5).InfoS("GenericPLEG: Reinspecting pods that previously failed inspection")
+			for pid, pod := range g.podsToReinspect {
+				if err := g.updateCache(pod, pid); err != nil {
+					// Rely on updateCache calling GetPodStatus to log the actual error.
+					klog.V(5).ErrorS(err, "PLEG: pod failed reinspection", "pod", klog.KRef(pod.Namespace, pod.Name))
+					needsReinspection[pid] = pod
+				}
+			}
+		}
+
+		// Update the cache timestamp.  This needs to happen *after*
+		// all pods have been properly updated in the cache.
+		g.cache.UpdateTime(timestamp)
+	}
+
+	// make sure we retain the list of pods that need reinspecting the next time relist is called
+	g.podsToReinspect = needsReinspection
 }
 
 func getContainersFromPods(pods ...*kubecontainer.Pod) []*kubecontainer.Container {
