@@ -146,7 +146,7 @@ message ContainerEventResponse {
     int64 created_at = 3;
 
     // ID of the sandbox container
-	string sandbox_id = 4;
+	PodSandboxMetadata pod_sandbox_metadata = 4;
 }
 
 enum ContainerEventType {
