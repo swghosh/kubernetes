@@ -1152,7 +1152,10 @@ func (r *remoteRuntimeService) ReopenContainerLog(containerID string) (err error
 }
 
 func (r *remoteRuntimeService) GetContainerEvents(containerEventsCh chan *runtimeapi.ContainerEventResponse) error {
-	ctx, cancel := getContextWithTimeout(r.timeout)
+	const maxDuration time.Duration = 1<<63 - 1 // TODO - need to handle this better
+	// ctx, cancel := getContextWithTimeout(r.timeout)
+	ctx, cancel := getContextWithTimeout(maxDuration)
+
 	defer cancel()
 
 	done := make(chan bool)
