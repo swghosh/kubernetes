@@ -678,8 +678,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI))
 	}
 
-	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
-	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	eventChannel := make(chan *pleg.PodLifecycleEvent, plegChannelCapacity)
+	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)

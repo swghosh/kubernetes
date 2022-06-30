@@ -107,12 +107,12 @@ type podRecord struct {
 type podRecords map[types.UID]*podRecord
 
 // NewGenericPLEG instantiates a new GenericPLEG object and return it.
-func NewGenericPLEG(runtime kubecontainer.Runtime, channelCapacity int,
+func NewGenericPLEG(runtime kubecontainer.Runtime, eventChannel chan *PodLifecycleEvent,
 	relistPeriod time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
 	return &GenericPLEG{
 		relistPeriod: relistPeriod,
 		runtime:      runtime,
-		eventChannel: make(chan *PodLifecycleEvent, channelCapacity),
+		eventChannel: eventChannel,
 		podRecords:   make(podRecords),
 		cache:        cache,
 		clock:        clock,
