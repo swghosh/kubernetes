@@ -100,27 +100,27 @@ func (e *EventedPLEG) watchEventsChannel() {
 		case runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT:
 			// e.Relist()
 
-			e.updatePodStatus(event)
+			go e.updatePodStatus(event)
 
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
 			// return err
 			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
-			e.Relist()
-			// e.updatePodStatus(event)
+			// e.Relist()
+			go e.updatePodStatus(event)
 
 			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId}
 			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
-			e.Relist()
-			// e.updatePodStatus(event)
+			// e.Relist()
+			go e.updatePodStatus(event)
 
 			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
 			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT:
-			e.Relist()
-			// e.updatePodStatus(event)
-
+			// e.Relist()
+			go e.updatePodStatus(event)
+			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
 			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
 
 			klog.V(2).InfoS("Recieved Container Deleted Event", "CRI container event", event)
@@ -128,13 +128,14 @@ func (e *EventedPLEG) watchEventsChannel() {
 	}
 }
 
-func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) error {
+func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) *PodLifecycleEvent {
 
 	podID := types.UID(event.PodSandboxMetadata.Uid)
 	podName := event.PodSandboxMetadata.Name
 	podNamespace := event.PodSandboxMetadata.Namespace
 
 	timestamp := e.clock.Now()
+	time.Sleep(3 * time.Second)
 	status, err := e.runtime.GetPodStatus(podID, podName, podNamespace)
 
 	if err != nil {
@@ -159,10 +160,83 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		status.IPs = e.getPodIPs(podID, status)
 	}
 
-	e.cache.Set(podID, status, err, timestamp)
+	e.getContainerStatesFromPodStatus(status, event)
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+		for _, sandbox := range status.SandboxStatuses {
+			if sandbox.Id == event.ContainerId {
+				e.cache.Delete(podID)
+			}
+		}
+	} else {
+		e.cache.Set(podID, status, err, timestamp)
+	}
 	e.cache.UpdateTime(timestamp)
 
-	return err
+	return nil
+}
+
+func generateEventsFromContainerState(state plegContainerState, event *runtimeapi.ContainerEventResponse) *PodLifecycleEvent {
+	switch state {
+	case plegContainerRunning:
+		return &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+	case plegContainerExited:
+		return &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+	case plegContainerUnknown:
+		return &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId}
+	case plegContainerNonExistent:
+		return &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+	}
+	return nil
+}
+
+func (e *EventedPLEG) getContainerStatesFromPodStatus(podStatus *kubecontainer.PodStatus, event *runtimeapi.ContainerEventResponse) {
+	// Default to the non-existent state.
+	// state := plegContainerNonExistent
+	if podStatus == nil {
+		// return []runtimeapi.ContainerState{state}
+		e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+	}
+
+	// isPodRunning := true
+	// allContainersDeleted := true
+	for _, containerStatus := range podStatus.ContainerStatuses {
+		state := convertState(containerStatus.State)
+		podLifeCycleEvent := generateEventsFromContainerState(state, event)
+		e.eventChannel <- podLifeCycleEvent
+
+		// if podLifeCycleEvent.Type != ContainerStarted {
+		// 	isPodRunning = false
+		// }
+
+		// if podLifeCycleEvent.Type != ContainerRemoved {
+		// 	allContainersDeleted = false
+		// }
+	}
+
+	for _, sandboxStatus := range podStatus.SandboxStatuses {
+		if event.ContainerId == sandboxStatus.Id {
+
+			// if isPodRunning {
+			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+			// }
+
+			// if allContainersDeleted {
+			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+			// }
+
+			state := sandboxStatus.GetState()
+			if state == runtimeapi.PodSandboxState_SANDBOX_READY && event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT {
+				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+			}
+
+			if state == runtimeapi.PodSandboxState_SANDBOX_NOTREADY && event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+			}
+		}
+	}
+
 }
 
 func (e *EventedPLEG) getPodIPs(pid types.UID, status *kubecontainer.PodStatus) []string {
