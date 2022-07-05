@@ -99,29 +99,36 @@ func (e *EventedPLEG) watchEventsChannel() {
 		switch event.ContainerEventType {
 		case runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT:
 			// e.Relist()
+			time.Sleep(2 * time.Second) // TODO - See why without this delay the pod states are not updated properly
 
-			go e.updatePodStatus(event)
+			e.updatePodStatus(event)
 
-			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
 			// return err
 			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
 			// e.Relist()
-			go e.updatePodStatus(event)
+			time.Sleep(2 * time.Second)
 
-			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId}
+			e.updatePodStatus(event)
+
+			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId}
 			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
 			// e.Relist()
-			go e.updatePodStatus(event)
+			time.Sleep(2 * time.Second)
 
-			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+			e.updatePodStatus(event)
+
+			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
 			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT:
 			// e.Relist()
-			go e.updatePodStatus(event)
-			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
-			// e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+			time.Sleep(2 * time.Second)
+
+			e.updatePodStatus(event)
+			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
 
 			klog.V(2).InfoS("Recieved Container Deleted Event", "CRI container event", event)
 		}
@@ -135,7 +142,6 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 	podNamespace := event.PodSandboxMetadata.Namespace
 
 	timestamp := e.clock.Now()
-	time.Sleep(3 * time.Second)
 	status, err := e.runtime.GetPodStatus(podID, podName, podNamespace)
 
 	if err != nil {
@@ -160,7 +166,8 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		status.IPs = e.getPodIPs(podID, status)
 	}
 
-	e.getContainerStatesFromPodStatus(status, event)
+	// Generate Pod Life Cycle events using the CRI events and Pod Status
+	// e.getContainerStatesFromPodStatus(status, event) // TODO - See if this helps in making the pod states more accurate
 	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
 		for _, sandbox := range status.SandboxStatuses {
 			if sandbox.Id == event.ContainerId {
