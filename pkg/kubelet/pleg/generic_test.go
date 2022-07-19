@@ -447,7 +447,7 @@ func TestHealthy(t *testing.T) {
 
 	// Advance by relistThreshold without any relisting. pleg should be unhealthy
 	// because it has been longer than relistThreshold since a relist occurred.
-	clock.Step(relistThreshold)
+	clock.Step(RelistThreshold)
 	ok, _ = pleg.Healthy()
 	assert.False(t, ok, "pleg should be unhealthy")
 }

@@ -681,9 +681,13 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI))
 	}
 
-	// adjust PLEG relisting period to higher value when Event PLEG is turned on
+	// adjust PLEG relisting period and threshold to higher value when Event PLEG is turned on
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
 		plegRelistPeriod = time.Second * 300
+
+		// TODO(swghosh): make relisting threshold a variable in this file instead of having
+		// to export it and adjust global var from another package here
+		pleg.RelistThreshold = 10 * time.Minute
 	}
 
 	eventChannel := make(chan *pleg.PodLifecycleEvent, plegChannelCapacity)

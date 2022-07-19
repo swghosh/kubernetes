@@ -76,12 +76,13 @@ const (
 	plegContainerExited      plegContainerState = "exited"
 	plegContainerUnknown     plegContainerState = "unknown"
 	plegContainerNonExistent plegContainerState = "non-existent"
-
-	// The threshold needs to be greater than the relisting period + the
-	// relisting time, which can vary significantly. Set a conservative
-	// threshold to avoid flipping between healthy and unhealthy.
-	relistThreshold = 3 * time.Minute
 )
+
+// The threshold needs to be greater than the relisting period + the
+// relisting time, which can vary significantly. Set a conservative
+// threshold to avoid flipping between healthy and unhealthy.
+// Note that this value is adjusted to a higher value when using EventPLEG.
+var RelistThreshold = 3 * time.Minute
 
 func convertState(state kubecontainer.State) plegContainerState {
 	switch state {
@@ -141,8 +142,8 @@ func (g *GenericPLEG) Healthy() (bool, error) {
 	// Expose as metric so you can alert on `time()-pleg_last_seen_seconds > nn`
 	metrics.PLEGLastSeen.Set(float64(relistTime.Unix()))
 	elapsed := g.clock.Since(relistTime)
-	if elapsed > relistThreshold {
-		return false, fmt.Errorf("pleg was last seen active %v ago; threshold is %v", elapsed, relistThreshold)
+	if elapsed > RelistThreshold {
+		return false, fmt.Errorf("pleg was last seen active %v ago; threshold is %v", elapsed, RelistThreshold)
 	}
 	return true, nil
 }
