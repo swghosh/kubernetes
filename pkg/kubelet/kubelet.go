@@ -64,6 +64,7 @@ import (
 	pluginwatcherapi "k8s.io/kubelet/pkg/apis/pluginregistration/v1"
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	"k8s.io/kubernetes/pkg/features"
+	kubefeatures "k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	"k8s.io/kubernetes/pkg/kubelet/apis/podresources"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
@@ -150,16 +151,6 @@ const (
 	// is a bit arbitrary and may be adjusted in the future.
 	plegChannelCapacity = 1000
 
-	// Generic PLEG relies on relisting for discovering container events.
-	// A longer period means that kubelet will take longer to detect container
-	// changes and to update pod status. On the other hand, a shorter period
-	// will cause more frequent relisting (e.g., container runtime operations),
-	// leading to higher cpu usage.
-	// Note that even though we set the period to 1s, the relisting itself can
-	// take more than 1s to finish if the container runtime responds slowly
-	// and/or when there are many container changes in one cycle.
-	plegRelistPeriod = time.Second * 300
-
 	// backOffPeriod is the period to back off when pod syncing results in an
 	// error. It is also used as the base period for the exponential backoff
 	// container restarts and image pulls.
@@ -178,6 +169,18 @@ const (
 )
 
 var etcHostsPath = getContainerEtcHostsPath()
+
+// Generic PLEG relies on relisting for discovering container events.
+// A longer period means that kubelet will take longer to detect container
+// changes and to update pod status. On the other hand, a shorter period
+// will cause more frequent relisting (e.g., container runtime operations),
+// leading to higher cpu usage.
+// Note that even though we set the period to 1s, the relisting itself can
+// take more than 1s to finish if the container runtime responds slowly
+// and/or when there are many container changes in one cycle.
+// Note that this value is adjusted to a higher value when Event PLEG
+// feature gate is turned on and being used.
+var plegRelistPeriod = time.Second * 1
 
 func getContainerEtcHostsPath() string {
 	if sysruntime.GOOS == "windows" {
@@ -678,9 +681,17 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI))
 	}
 
+	// adjust PLEG relisting period to higher value when Event PLEG is turned on
+	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
+		plegRelistPeriod = time.Second * 300
+	}
+
 	eventChannel := make(chan *pleg.PodLifecycleEvent, plegChannelCapacity)
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
-	klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
+
+	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
+		klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	}
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
@@ -1454,7 +1465,10 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
-	kl.eventedPleg.Start()
+	// Start eventedPLEG only if EventPLEG feature gate is enabled.
+	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
+		kl.eventedPleg.Start()
+	}
 	kl.syncLoop(updates, kl)
 
 }
