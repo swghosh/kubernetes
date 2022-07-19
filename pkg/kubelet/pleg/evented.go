@@ -32,12 +32,12 @@ import (
 type EventedPLEG struct {
 	// The period for relisting.
 	relistPeriod time.Duration
+	// The threshold period for completing each relisting.
+	relistThreshold time.Duration
 	// The container runtime.
 	runtime kubecontainer.Runtime
 
 	runtimeService internalapi.RuntimeService
-
-	genericPLEG PodLifecycleEventGenerator
 
 	// The channel from which the subscriber listens events.
 	eventChannel chan *PodLifecycleEvent
@@ -54,16 +54,16 @@ type EventedPLEG struct {
 }
 
 // NewGenericPLEG instantiates a new GenericPLEG object and return it.
-func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, genericPLEG PodLifecycleEventGenerator, eventChannel chan *PodLifecycleEvent,
-	relistPeriod time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
+func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, eventChannel chan *PodLifecycleEvent,
+	relistPeriod time.Duration, relistThreshold time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
 	return &EventedPLEG{
-		relistPeriod:   relistPeriod,
-		runtime:        runtime,
-		runtimeService: runtimeService,
-		genericPLEG:    genericPLEG,
-		eventChannel:   eventChannel,
-		cache:          cache,
-		clock:          clock,
+		relistPeriod:    relistPeriod,
+		relistThreshold: relistThreshold,
+		runtime:         runtime,
+		runtimeService:  runtimeService,
+		eventChannel:    eventChannel,
+		cache:           cache,
+		clock:           clock,
 	}
 }
 

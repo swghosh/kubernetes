@@ -64,7 +64,6 @@ import (
 	pluginwatcherapi "k8s.io/kubelet/pkg/apis/pluginregistration/v1"
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	"k8s.io/kubernetes/pkg/features"
-	kubefeatures "k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	"k8s.io/kubernetes/pkg/kubelet/apis/podresources"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
@@ -180,7 +179,10 @@ var etcHostsPath = getContainerEtcHostsPath()
 // and/or when there are many container changes in one cycle.
 // Note that this value is adjusted to a higher value when Event PLEG
 // feature gate is turned on and being used.
-var plegRelistPeriod = time.Second * 1
+var (
+	plegRelistPeriod    = time.Second * 1
+	plegRelistThreshold = time.Minute * 3
+)
 
 func getContainerEtcHostsPath() string {
 	if sysruntime.GOOS == "windows" {
@@ -682,19 +684,16 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	// adjust PLEG relisting period and threshold to higher value when Event PLEG is turned on
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventPLEG) {
 		plegRelistPeriod = time.Second * 300
-
-		// TODO(swghosh): make relisting threshold a variable in this file instead of having
-		// to export it and adjust global var from another package here
-		pleg.RelistThreshold = 10 * time.Minute
+		plegRelistThreshold = 10 * time.Minute
 	}
 
 	eventChannel := make(chan *pleg.PodLifecycleEvent, plegChannelCapacity)
-	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, plegRelistPeriod, plegRelistThreshold, klet.podCache, clock.RealClock{})
 
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
-		klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, klet.pleg, eventChannel, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventPLEG) {
+		klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, eventChannel, plegRelistPeriod, plegRelistThreshold, klet.podCache, clock.RealClock{})
 	}
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
@@ -1470,7 +1469,7 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
 	// Start eventedPLEG only if EventPLEG feature gate is enabled.
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.EventPLEG) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventPLEG) {
 		kl.eventedPleg.Start()
 	}
 	kl.syncLoop(updates, kl)
