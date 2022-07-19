@@ -85,10 +85,6 @@ func (e *EventedPLEG) Healthy() (bool, error) {
 	return true, nil
 }
 
-func (e *EventedPLEG) Relist() {
-	e.genericPLEG.Relist()
-}
-
 func (e *EventedPLEG) watchEventsChannel() {
 
 	containerEventsResponseCh := make(chan *runtimeapi.ContainerEventResponse, 100000)

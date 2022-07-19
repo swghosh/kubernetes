@@ -129,7 +129,7 @@ func (g *GenericPLEG) Watch() chan *PodLifecycleEvent {
 
 // Start spawns a goroutine to relist periodically.
 func (g *GenericPLEG) Start() {
-	go wait.Until(g.Relist, g.relistPeriod, wait.NeverStop)
+	go wait.Until(g.relist, g.relistPeriod, wait.NeverStop)
 }
 
 // Healthy check if PLEG work properly.
@@ -188,7 +188,7 @@ func (g *GenericPLEG) updateRelistTime(timestamp time.Time) {
 
 // relist queries the container runtime for list of pods/containers, compare
 // with the internal pods/containers, and generates events accordingly.
-func (g *GenericPLEG) Relist() {
+func (g *GenericPLEG) relist() {
 	klog.V(5).InfoS("GenericPLEG: Relisting")
 
 	if lastRelistTime := g.getRelistTime(); !lastRelistTime.IsZero() {
