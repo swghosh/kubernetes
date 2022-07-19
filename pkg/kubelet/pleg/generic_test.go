@@ -60,11 +60,12 @@ func newTestGenericPLEGWithChannelSize(eventChannelCap int) *TestGenericPLEG {
 	// The channel capacity should be large enough to hold all events in a
 	// single test.
 	pleg := &GenericPLEG{
-		relistPeriod: time.Hour,
-		runtime:      fakeRuntime,
-		eventChannel: make(chan *PodLifecycleEvent, eventChannelCap),
-		podRecords:   make(podRecords),
-		clock:        clock,
+		relistPeriod:    time.Hour,
+		relistThreshold: 3 * time.Minute,
+		runtime:         fakeRuntime,
+		eventChannel:    make(chan *PodLifecycleEvent, eventChannelCap),
+		podRecords:      make(podRecords),
+		clock:           clock,
 	}
 	return &TestGenericPLEG{pleg: pleg, runtime: fakeRuntime, clock: clock}
 }
