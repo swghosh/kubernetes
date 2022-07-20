@@ -17,7 +17,7 @@ limitations under the License.
 package pleg
 
 import (
-	"sync/atomic"
+	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -30,20 +30,14 @@ import (
 )
 
 type EventedPLEG struct {
-	// The period for relisting.
-	relistPeriod time.Duration
 	// The container runtime.
 	runtime kubecontainer.Runtime
 
 	runtimeService internalapi.RuntimeService
 
-	genericPLEG PodLifecycleEventGenerator
-
 	// The channel from which the subscriber listens events.
 	eventChannel chan *PodLifecycleEvent
 
-	// Time of the last relisting.
-	relistTime atomic.Value
 	// Cache for storing the runtime states required for syncing pods.
 	cache kubecontainer.Cache
 	// For testability.
@@ -54,13 +48,11 @@ type EventedPLEG struct {
 }
 
 // NewGenericPLEG instantiates a new GenericPLEG object and return it.
-func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, genericPLEG PodLifecycleEventGenerator, eventChannel chan *PodLifecycleEvent,
-	relistPeriod time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
+func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, eventChannel chan *PodLifecycleEvent,
+	cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
 	return &EventedPLEG{
-		relistPeriod:   relistPeriod,
 		runtime:        runtime,
 		runtimeService: runtimeService,
-		genericPLEG:    genericPLEG,
 		eventChannel:   eventChannel,
 		cache:          cache,
 		clock:          clock,
@@ -80,13 +72,18 @@ func (e *EventedPLEG) Start() {
 }
 
 // Healthy check if PLEG work properly.
-// relistThreshold is the maximum interval between two relist.
 func (e *EventedPLEG) Healthy() (bool, error) {
-	return true, nil
-}
+	// GenericPLEG is declared unhealthy when relisting time is more than
+	// the relistThreshold. In case, EventedPLEG is turned on the value of
+	// relistingPeriod, relistingThreshold is adjusted to higher values and
+	// so health of Generic PLEG should take care of the condition checking
+	// higher relistThreshold between last two relist.
 
-func (e *EventedPLEG) Relist() {
-	e.genericPLEG.Relist()
+	// EventedPLEG is declared unhealthy only if eventChannel is out of capacity.
+	if len(e.eventChannel) >= cap(e.eventChannel) {
+		return false, fmt.Errorf("pleg event channel capacity is full with %v events", len(e.eventChannel))
+	}
+	return true, nil
 }
 
 func (e *EventedPLEG) watchEventsChannel() {

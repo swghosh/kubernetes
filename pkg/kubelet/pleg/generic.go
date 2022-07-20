@@ -49,6 +49,10 @@ import (
 type GenericPLEG struct {
 	// The period for relisting.
 	relistPeriod time.Duration
+	// The relisting threshold needs to be greater than the relisting period +
+	// the relisting time, which can vary significantly. Set a conservative
+	// threshold to avoid flipping between healthy and unhealthy.
+	relistThreshold time.Duration
 	// The container runtime.
 	runtime kubecontainer.Runtime
 	// The channel from which the subscriber listens events.
@@ -76,11 +80,6 @@ const (
 	plegContainerExited      plegContainerState = "exited"
 	plegContainerUnknown     plegContainerState = "unknown"
 	plegContainerNonExistent plegContainerState = "non-existent"
-
-	// The threshold needs to be greater than the relisting period + the
-	// relisting time, which can vary significantly. Set a conservative
-	// threshold to avoid flipping between healthy and unhealthy.
-	relistThreshold = 3 * time.Minute
 )
 
 func convertState(state kubecontainer.State) plegContainerState {
@@ -108,14 +107,16 @@ type podRecords map[types.UID]*podRecord
 
 // NewGenericPLEG instantiates a new GenericPLEG object and return it.
 func NewGenericPLEG(runtime kubecontainer.Runtime, eventChannel chan *PodLifecycleEvent,
-	relistPeriod time.Duration, cache kubecontainer.Cache, clock clock.Clock) PodLifecycleEventGenerator {
+	relistPeriod time.Duration, relistThreshold time.Duration, cache kubecontainer.Cache,
+	clock clock.Clock) PodLifecycleEventGenerator {
 	return &GenericPLEG{
-		relistPeriod: relistPeriod,
-		runtime:      runtime,
-		eventChannel: eventChannel,
-		podRecords:   make(podRecords),
-		cache:        cache,
-		clock:        clock,
+		relistPeriod:    relistPeriod,
+		relistThreshold: relistThreshold,
+		runtime:         runtime,
+		eventChannel:    eventChannel,
+		podRecords:      make(podRecords),
+		cache:           cache,
+		clock:           clock,
 	}
 }
 
@@ -128,7 +129,7 @@ func (g *GenericPLEG) Watch() chan *PodLifecycleEvent {
 
 // Start spawns a goroutine to relist periodically.
 func (g *GenericPLEG) Start() {
-	go wait.Until(g.Relist, g.relistPeriod, wait.NeverStop)
+	go wait.Until(g.relist, g.relistPeriod, wait.NeverStop)
 }
 
 // Healthy check if PLEG work properly.
@@ -141,8 +142,8 @@ func (g *GenericPLEG) Healthy() (bool, error) {
 	// Expose as metric so you can alert on `time()-pleg_last_seen_seconds > nn`
 	metrics.PLEGLastSeen.Set(float64(relistTime.Unix()))
 	elapsed := g.clock.Since(relistTime)
-	if elapsed > relistThreshold {
-		return false, fmt.Errorf("pleg was last seen active %v ago; threshold is %v", elapsed, relistThreshold)
+	if elapsed > g.relistThreshold {
+		return false, fmt.Errorf("pleg was last seen active %v ago; threshold is %v", elapsed, g.relistThreshold)
 	}
 	return true, nil
 }
@@ -187,7 +188,7 @@ func (g *GenericPLEG) updateRelistTime(timestamp time.Time) {
 
 // relist queries the container runtime for list of pods/containers, compare
 // with the internal pods/containers, and generates events accordingly.
-func (g *GenericPLEG) Relist() {
+func (g *GenericPLEG) relist() {
 	klog.V(5).InfoS("GenericPLEG: Relisting")
 
 	if lastRelistTime := g.getRelistTime(); !lastRelistTime.IsZero() {
