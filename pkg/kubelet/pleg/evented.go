@@ -26,6 +26,7 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 	"k8s.io/klog/v2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/utils/clock"
 )
 
@@ -100,7 +101,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 			e.updatePodStatus(event)
 
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
+			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
 			// return err
 			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
@@ -109,7 +110,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 			e.updatePodStatus(event)
 
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId}
+			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId})
 			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
 			// e.Relist()
@@ -117,15 +118,15 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 			e.updatePodStatus(event)
 
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId})
 			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT:
 			// e.Relist()
 			time.Sleep(2 * time.Second)
 
 			e.updatePodStatus(event)
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
-			e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
+			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId})
 
 			klog.V(2).InfoS("Recieved Container Deleted Event", "CRI container event", event)
 		}
@@ -198,7 +199,7 @@ func (e *EventedPLEG) getContainerStatesFromPodStatus(podStatus *kubecontainer.P
 	// state := plegContainerNonExistent
 	if podStatus == nil {
 		// return []runtimeapi.ContainerState{state}
-		e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+		e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId})
 	}
 
 	// isPodRunning := true
@@ -206,7 +207,7 @@ func (e *EventedPLEG) getContainerStatesFromPodStatus(podStatus *kubecontainer.P
 	for _, containerStatus := range podStatus.ContainerStatuses {
 		state := convertState(containerStatus.State)
 		podLifeCycleEvent := generateEventsFromContainerState(state, event)
-		e.eventChannel <- podLifeCycleEvent
+		e.sendEvent(podLifeCycleEvent)
 
 		// if podLifeCycleEvent.Type != ContainerStarted {
 		// 	isPodRunning = false
@@ -221,22 +222,22 @@ func (e *EventedPLEG) getContainerStatesFromPodStatus(podStatus *kubecontainer.P
 		if event.ContainerId == sandboxStatus.Id {
 
 			// if isPodRunning {
-			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+			// 	e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId})
 			// }
 
 			// if allContainersDeleted {
-			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
-			// 	e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+			// 	e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
+			// 	e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId})
 			// }
 
 			state := sandboxStatus.GetState()
 			if state == runtimeapi.PodSandboxState_SANDBOX_READY && event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT {
-				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId}
+				e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId})
 			}
 
 			if state == runtimeapi.PodSandboxState_SANDBOX_NOTREADY && event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
-				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId}
-				e.eventChannel <- &PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId}
+				e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
+				e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId})
 			}
 		}
 	}
@@ -263,4 +264,14 @@ func (e *EventedPLEG) getPodIPs(pid types.UID, status *kubecontainer.PodStatus) 
 	// For pods with no ready containers or sandboxes (like exited pods)
 	// use the old status' pod IP
 	return oldStatus.IPs
+}
+
+func (e *EventedPLEG) sendEvent(event *PodLifecycleEvent) {
+	select {
+	case e.eventChannel <- event:
+	default:
+		// record how many events were discarded due to channel out of capacity
+		metrics.PLEGDiscardEvents.Inc()
+		klog.ErrorS(nil, "Event channel is full, discarded pod lifecycle event")
+	}
 }
