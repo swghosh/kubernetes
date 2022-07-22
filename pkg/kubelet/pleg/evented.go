@@ -79,10 +79,12 @@ func (e *EventedPLEG) Healthy() (bool, error) {
 	// relistingPeriod, relistingThreshold is adjusted to higher values and
 	// so health of Generic PLEG should take care of the condition checking
 	// higher relistThreshold between last two relist.
+	currentTime := e.clock.Now()
+	metrics.PLEGLastSeen.Set(float64(currentTime.Unix()))
 
 	// EventedPLEG is declared unhealthy only if eventChannel is out of capacity.
 	if len(e.eventChannel) >= cap(e.eventChannel) {
-		return false, fmt.Errorf("pleg event channel capacity is full with %v events", len(e.eventChannel))
+		return false, fmt.Errorf("EventPLEG: pleg event channel capacity is full with %v events", len(e.eventChannel))
 	}
 	return true, nil
 }
@@ -103,7 +105,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
 			// return err
-			klog.V(2).InfoS("Recieved Container Stopped Event", "CRI container event", event)
+			klog.V(2).InfoS("EventPLEG: Recieved Container Stopped Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT:
 			// e.Relist()
 			time.Sleep(3 * time.Second)
@@ -111,7 +113,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 			e.updatePodStatus(event)
 
 			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerChanged, Data: event.ContainerId})
-			klog.V(2).InfoS("Recieved Container Created Event", "CRI container event", event)
+			klog.V(2).InfoS("EventPLEG: Recieved Container Created Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT:
 			// e.Relist()
 			time.Sleep(3 * time.Second)
@@ -119,7 +121,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 			e.updatePodStatus(event)
 
 			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerStarted, Data: event.ContainerId})
-			klog.V(2).InfoS("Recieved Container Started Event", "CRI container event", event)
+			klog.V(2).InfoS("EventPLEG: Recieved Container Started Event", "CRI container event", event)
 		case runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT:
 			// e.Relist()
 			time.Sleep(3 * time.Second)
@@ -128,7 +130,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerDied, Data: event.ContainerId})
 			e.sendEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxMetadata.Uid), Type: ContainerRemoved, Data: event.ContainerId})
 
-			klog.V(2).InfoS("Recieved Container Deleted Event", "CRI container event", event)
+			klog.V(2).InfoS("EventPLEG: Recieved Container Deleted Event", "CRI container event", event)
 		}
 	}
 }
@@ -147,15 +149,15 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		// if branch is okay, we just use it to determine whether the
 		// additional "podStatus" key and its value should be added.
 		if klog.V(6).Enabled() {
-			klog.ErrorS(err, "PLEG: Write status", "pod", klog.KRef(podNamespace, podName), "podStatus", status)
+			klog.ErrorS(err, "EventPLEG: Write status", "pod", klog.KRef(podNamespace, podName), "podStatus", status)
 		} else {
-			klog.ErrorS(err, "PLEG: Write status", "pod", klog.KRef(podNamespace, podName))
+			klog.ErrorS(err, "EventPLEG: Write status", "pod", klog.KRef(podNamespace, podName))
 		}
 	} else {
 		if klogV := klog.V(6); klogV.Enabled() {
-			klogV.InfoS("PLEG: Write status", "pod", klog.KRef(podNamespace, podName), "podStatus", status)
+			klogV.InfoS("EventPLEG: Write status", "pod", klog.KRef(podNamespace, podName), "podStatus", status)
 		} else {
-			klog.V(4).InfoS("PLEG: Write status", "pod", klog.KRef(podNamespace, podName))
+			klog.V(4).InfoS("EventPLEG: Write status", "pod", klog.KRef(podNamespace, podName))
 		}
 		// Preserve the pod IP across cache updates if the new IP is empty.
 		// When a pod is torn down, kubelet may race with PLEG and retrieve
@@ -272,6 +274,6 @@ func (e *EventedPLEG) sendEvent(event *PodLifecycleEvent) {
 	default:
 		// record how many events were discarded due to channel out of capacity
 		metrics.PLEGDiscardEvents.Inc()
-		klog.ErrorS(nil, "Event channel is full, discarded pod lifecycle event")
+		klog.ErrorS(nil, "EventPLEG: Event channel is full, discarded pod lifecycle event")
 	}
 }
