@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
+	pleg "k8s.io/kubernetes/pkg/kubelet/pleg"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/queue"
 )
@@ -913,15 +914,20 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 			case update.Options.RunningPod != nil:
 				// when we receive a running pod, we don't need status at all
 			default:
-				// wait until we see the next refresh from the PLEG via the cache (max 2s)
-				// TODO: this adds ~1s of latency on all transitions from sync to terminating
-				//  to terminated, and on all termination retries (including evictions). We should
-				//  improve latency by making the the pleg continuous and by allowing pod status
-				//  changes to be refreshed when key events happen (killPod, sync->terminating).
-				//  Improving this latency also reduces the possibility that a terminated
-				//  container's status is garbage collected before we have a chance to update the
-				//  API server (thus losing the exit code).
-				status, err = p.podCache.GetNewerThan(pod.UID, lastSyncTime)
+				if !pleg.IsEventedPLEGInUse {
+					// wait until we see the next refresh from the PLEG via the cache (max 2s)
+					// TODO: this adds ~1s of latency on all transitions from sync to terminating
+					//  to terminated, and on all termination retries (including evictions). We should
+					//  improve latency by making the the pleg continuous and by allowing pod status
+					//  changes to be refreshed when key events happen (killPod, sync->terminating).
+					//  Improving this latency also reduces the possibility that a terminated
+					//  container's status is garbage collected before we have a chance to update the
+					//  API server (thus losing the exit code).
+					status, err = p.podCache.GetNewerThan(pod.UID, lastSyncTime)
+				} else {
+					// We don't have to wait for the cache to sync because the Evented PLEG is in use.
+					status, err = p.podCache.Get(pod.UID)
+				}
 			}
 			if err != nil {
 				// This is the legacy event thrown by manage pod loop all other events are now dispatched
@@ -950,7 +956,9 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 				isTerminal, err = p.syncPodFn(ctx, update.Options.UpdateType, pod, update.Options.MirrorPod, status)
 			}
 
-			lastSyncTime = time.Now()
+			if !pleg.IsEventedPLEGInUse {
+				lastSyncTime = time.Now()
+			}
 			return err
 		}()
 
