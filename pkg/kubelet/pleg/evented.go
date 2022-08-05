@@ -154,6 +154,95 @@ func (e *EventedPLEG) processCRIEvents(containerEventsResponseCh chan *runtimeap
 	}
 }
 
+func (e *EventedPLEG) isSandboxEvent(event *runtimeapi.ContainerEventResponse, podStatus *kubecontainer.PodStatus) bool {
+	for _, sandboxStatus := range podStatus.SandboxStatuses {
+		if event.ContainerId == sandboxStatus.Id {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *EventedPLEG) isValideSandboxEvent(event *runtimeapi.ContainerEventResponse, podStatus *kubecontainer.PodStatus) bool {
+
+	var sanboxState runtimeapi.PodSandboxState
+
+	for _, sandboxStatus := range podStatus.SandboxStatuses {
+		if event.ContainerId == sandboxStatus.Id {
+			sanboxState = sandboxStatus.State
+			break
+		}
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT &&
+		sanboxState == runtimeapi.PodSandboxState_SANDBOX_READY {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT &&
+		sanboxState == runtimeapi.PodSandboxState_SANDBOX_READY {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT &&
+		sanboxState == runtimeapi.PodSandboxState_SANDBOX_NOTREADY {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT &&
+		sanboxState == runtimeapi.PodSandboxState_SANDBOX_NOTREADY {
+		return true
+	}
+
+	return false
+}
+
+func (e *EventedPLEG) validateContainerEvent(event *runtimeapi.ContainerEventResponse, podStatus *kubecontainer.PodStatus) bool {
+
+	var containerState kubecontainer.State
+
+	for _, containerStatus := range podStatus.ContainerStatuses {
+		if event.ContainerId == containerStatus.ID.ID {
+			containerState = containerStatus.State
+			break
+		}
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_CREATED_EVENT &&
+		containerState == kubecontainer.ContainerStateCreated {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STARTED_EVENT &&
+		containerState == kubecontainer.ContainerStateRunning {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_STOPPED_EVENT &&
+		containerState == kubecontainer.ContainerStateExited {
+		return true
+	}
+
+	if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+		return true
+	}
+
+	return false
+}
+
+func (e *EventedPLEG) isValidateEvent(event *runtimeapi.ContainerEventResponse, podStatus *kubecontainer.PodStatus) bool {
+	if len(podStatus.ContainerStatuses) == 0 && len(podStatus.SandboxStatuses) == 0 &&
+		event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+		return true
+	}
+
+	if e.isSandboxEvent(event, podStatus) {
+		return e.isValideSandboxEvent(event, podStatus)
+	} else {
+		return e.validateContainerEvent(event, podStatus)
+	}
+}
+
 func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) {
 	podID := types.UID(event.PodSandboxMetadata.Uid)
 	podName := event.PodSandboxMetadata.Name
@@ -182,6 +271,12 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		// a pod status after network teardown, but the kubernetes API expects
 		// the completed pod's IP to be available after the pod is dead.
 		status.IPs = e.getPodIPs(podID, status)
+	}
+
+	if !e.isValidateEvent(event, status) {
+		klog.ErrorS(err, "Evented PLEG: Invalid event received", "event", event, "podStatus", status)
+		e.Relist() // Force relisting to make sure the pod statuses are up to date.
+		return
 	}
 
 	e.updateRunningPodMetric(status)
