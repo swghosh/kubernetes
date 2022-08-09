@@ -273,11 +273,12 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		status.IPs = e.getPodIPs(podID, status)
 	}
 
-	if !e.isValidateEvent(event, status) {
-		klog.ErrorS(err, "Evented PLEG: Invalid event received", "event", event, "podStatus", status)
-		e.Relist() // Force relisting to make sure the pod statuses are up to date.
-		return
-	}
+	// TODO - Disabling it until we fix the issue with inconsistent pod status
+	// if !e.isValidateEvent(event, status) {
+	// 	klog.ErrorS(err, "Evented PLEG: Invalid event received", "event", event, "podStatus", status)
+	// 	e.Relist() // Force relisting to make sure the pod statuses are up to date.
+	// 	return
+	// }
 
 	e.updateRunningPodMetric(status)
 	e.updateRunningContainerMetric(status)
