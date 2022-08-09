@@ -18,6 +18,7 @@ package pleg
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -70,6 +71,8 @@ type GenericPLEG struct {
 	relistThreshold time.Duration
 	// Stop the Generic PLEG by closing the channel.
 	stopCh chan struct{}
+
+	mu sync.Mutex
 }
 
 // plegContainerState has a one-to-one mapping to the
@@ -140,7 +143,7 @@ func (g *GenericPLEG) Start() {
 }
 
 func (g *GenericPLEG) Stop() {
-	close(g.stopCh)
+	close(g.stopCh) //FIXME : if someone calls this function multiple times, it will panic.
 }
 
 func (g *GenericPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {
@@ -205,6 +208,9 @@ func (g *GenericPLEG) updateRelistTime(timestamp time.Time) {
 // relist queries the container runtime for list of pods/containers, compare
 // with the internal pods/containers, and generates events accordingly.
 func (g *GenericPLEG) relist() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	klog.V(5).InfoS("GenericPLEG: Relisting")
 
 	if lastRelistTime := g.getRelistTime(); !lastRelistTime.IsZero() {

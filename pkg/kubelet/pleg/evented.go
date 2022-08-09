@@ -103,7 +103,7 @@ func (e *EventedPLEG) Start() {
 }
 
 func (e *EventedPLEG) Stop() {
-	close(e.stopCh)
+	close(e.stopCh) //FIXME : if someone calls this function multiple times, it will panic.
 }
 
 func (e *EventedPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {
