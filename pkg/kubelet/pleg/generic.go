@@ -68,6 +68,8 @@ type GenericPLEG struct {
 	// the relisting time, which can vary significantly. Set a conservative
 	// threshold to avoid flipping between healthy and unhealthy.
 	relistThreshold time.Duration
+	// Stop the Generic PLEG by closing the channel.
+	stopCh chan struct{}
 }
 
 // plegContainerState has a one-to-one mapping to the
@@ -133,7 +135,17 @@ func (g *GenericPLEG) Relist() {
 
 // Start spawns a goroutine to relist periodically.
 func (g *GenericPLEG) Start() {
-	go wait.Until(g.relist, g.relistPeriod, wait.NeverStop)
+	g.stopCh = make(chan struct{})
+	go wait.Until(g.relist, g.relistPeriod, g.stopCh)
+}
+
+func (g *GenericPLEG) Stop() {
+	close(g.stopCh)
+}
+
+func (g *GenericPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {
+	g.relistPeriod = relistingPeriod
+	g.relistThreshold = relistThreshold
 }
 
 // Healthy check if PLEG work properly.

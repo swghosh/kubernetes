@@ -696,7 +696,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, eventedPlegRelistPeriod,
 			eventedPlegRelistThreshold, klet.podCache, clock.RealClock{})
 		klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, eventChannel,
-			klet.podCache, klet.pleg, eventedPlegMaxStreamRetries, genericPlegRelistPeriod, clock.RealClock{})
+			klet.podCache, klet.pleg, eventedPlegMaxStreamRetries, genericPlegRelistPeriod, genericPlegRelistThreshold, clock.RealClock{})
 	} else {
 		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, genericPlegRelistPeriod,
 			genericPlegRelistThreshold, klet.podCache, clock.RealClock{})

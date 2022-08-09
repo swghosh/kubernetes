@@ -59,12 +59,18 @@ type EventedPLEG struct {
 
 	// The period for relisting all containers using generic pleg as a fallback
 	genericPlegRelistPeriod time.Duration
+
+	// The threshold value for the Generic PLEG health
+	genericPlegRelistThreshold time.Duration
+
+	// Stop the Evented PLEG by closing the channel.
+	stopCh chan struct{}
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
 func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.RuntimeService, eventChannel chan *PodLifecycleEvent,
 	cache kubecontainer.Cache, genericPleg PodLifecycleEventGenerator, eventedPlegMaxStreamRetries int,
-	genericPlegRelistPeriod time.Duration, clock clock.Clock) PodLifecycleEventGenerator {
+	genericPlegRelistPeriod time.Duration, genericPlegRelistThreshold time.Duration, clock clock.Clock) PodLifecycleEventGenerator {
 	return &EventedPLEG{
 		runtime:                     runtime,
 		runtimeService:              runtimeService,
@@ -73,6 +79,7 @@ func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.Ru
 		genericPleg:                 genericPleg,
 		eventedPlegMaxStreamRetries: eventedPlegMaxStreamRetries,
 		genericPlegRelistPeriod:     genericPlegRelistPeriod,
+		genericPlegRelistThreshold:  genericPlegRelistThreshold,
 		clock:                       clock,
 	}
 }
@@ -91,7 +98,16 @@ func (e *EventedPLEG) Relist() {
 // Start spawns a goroutine to relist periodically.
 func (e *EventedPLEG) Start() {
 	IsEventedPLEGInUse = true
-	go wait.Forever(e.watchEventsChannel, 0)
+	e.stopCh = make(chan struct{})
+	go wait.Until(e.watchEventsChannel, 0, e.stopCh)
+}
+
+func (e *EventedPLEG) Stop() {
+	close(e.stopCh)
+}
+
+func (e *EventedPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {
+	e.genericPleg.Update(relistingPeriod, relistThreshold)
 }
 
 // Healthy check if PLEG work properly.
@@ -136,10 +152,16 @@ func (e *EventedPLEG) watchEventsChannel() {
 			}
 
 			if numAttempts >= e.eventedPlegMaxStreamRetries {
-				klog.ErrorS(err, "Evented PLEG: Failed to get container events")
-				IsEventedPLEGInUse = false
-				// Fall back to Generic PLEG relisting since Evented PLEG is not working.
-				wait.Until(e.Relist, e.genericPlegRelistPeriod, wait.NeverStop)
+				if IsEventedPLEGInUse {
+					klog.ErrorS(err, "Evented PLEG: Failed to get container events")
+					IsEventedPLEGInUse = false
+					// Fall back to Generic PLEG relisting since Evented PLEG is not working.
+					e.genericPleg.Stop()                                              // Stop the existing Generic PLEG which runs with longer relisting period when Evented PLEG is in use.
+					e.Stop()                                                          // Stop the evented PLEG too
+					e.Update(e.genericPlegRelistPeriod, e.genericPlegRelistThreshold) // Update the relisting period to the default value for the Generic PLEG.
+					e.genericPleg.Start()
+					break
+				}
 			}
 		}
 	}()
