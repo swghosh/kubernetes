@@ -19,6 +19,7 @@ package pleg
 import (
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -65,6 +66,8 @@ type EventedPLEG struct {
 
 	// Stop the Evented PLEG by closing the channel.
 	stopCh chan struct{}
+
+	runningMu sync.Mutex
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
@@ -97,13 +100,22 @@ func (e *EventedPLEG) Relist() {
 
 // Start spawns a goroutine to relist periodically.
 func (e *EventedPLEG) Start() {
-	IsEventedPLEGInUse = true
-	e.stopCh = make(chan struct{})
-	go wait.Until(e.watchEventsChannel, 0, e.stopCh)
+	e.runningMu.Lock()
+	defer e.runningMu.Unlock()
+	if !IsEventedPLEGInUse {
+		IsEventedPLEGInUse = true
+		e.stopCh = make(chan struct{})
+		go wait.Until(e.watchEventsChannel, 0, e.stopCh)
+	}
 }
 
 func (e *EventedPLEG) Stop() {
-	close(e.stopCh) //FIXME : if someone calls this function multiple times, it will panic.
+	e.runningMu.Lock()
+	defer e.runningMu.Unlock()
+	if IsEventedPLEGInUse {
+		close(e.stopCh)
+		IsEventedPLEGInUse = false
+	}
 }
 
 func (e *EventedPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {

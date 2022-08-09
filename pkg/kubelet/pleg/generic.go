@@ -73,6 +73,10 @@ type GenericPLEG struct {
 	stopCh chan struct{}
 
 	mu sync.Mutex
+
+	isRunning bool
+
+	runningMu sync.Mutex
 }
 
 // plegContainerState has a one-to-one mapping to the
@@ -138,12 +142,22 @@ func (g *GenericPLEG) Relist() {
 
 // Start spawns a goroutine to relist periodically.
 func (g *GenericPLEG) Start() {
-	g.stopCh = make(chan struct{})
-	go wait.Until(g.relist, g.relistPeriod, g.stopCh)
+	g.runningMu.Lock()
+	defer g.runningMu.Unlock()
+	if !g.isRunning {
+		g.isRunning = true
+		g.stopCh = make(chan struct{})
+		go wait.Until(g.relist, g.relistPeriod, g.stopCh)
+	}
 }
 
 func (g *GenericPLEG) Stop() {
-	close(g.stopCh) //FIXME : if someone calls this function multiple times, it will panic.
+	g.runningMu.Lock()
+	defer g.runningMu.Unlock()
+	if g.isRunning {
+		close(g.stopCh)
+		g.isRunning = false
+	}
 }
 
 func (g *GenericPLEG) Update(relistingPeriod time.Duration, relistThreshold time.Duration) {
