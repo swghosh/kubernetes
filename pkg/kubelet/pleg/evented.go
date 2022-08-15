@@ -68,6 +68,19 @@ type EventedPLEG struct {
 	stopCh chan struct{}
 
 	runningMu sync.Mutex
+
+	podProcessChan *sync.Map
+}
+
+type lockedEventChannel struct {
+	sync.Mutex
+	channel chan *runtimeapi.ContainerEventResponse
+}
+
+func newLockedChannel() *lockedEventChannel {
+	return &lockedEventChannel{
+		channel: make(chan *runtimeapi.ContainerEventResponse, 1000),
+	}
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
@@ -84,6 +97,7 @@ func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.Ru
 		genericPlegRelistPeriod:     genericPlegRelistPeriod,
 		genericPlegRelistThreshold:  genericPlegRelistThreshold,
 		clock:                       clock,
+		podProcessChan:              &sync.Map{},
 	}
 }
 
@@ -106,6 +120,7 @@ func (e *EventedPLEG) Start() {
 		IsEventedPLEGInUse = true
 		e.stopCh = make(chan struct{})
 		go wait.Until(e.watchEventsChannel, 0, e.stopCh)
+		go wait.Forever(e.handleEvents, 0)
 	}
 }
 
@@ -183,8 +198,42 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 func (e *EventedPLEG) processCRIEvents(containerEventsResponseCh chan *runtimeapi.ContainerEventResponse) {
 	for event := range containerEventsResponseCh {
+		v, ok := e.podProcessChan.Load(event.PodSandboxMetadata.Uid)
+		var ch *lockedEventChannel
+		if !ok {
+			ch = newLockedChannel()
+			e.podProcessChan.Store(event.PodSandboxMetadata.Uid, ch)
+		} else {
+			ch = v.(*lockedEventChannel)
+		}
+		ch.channel <- event
+		// e.updatePodStatus(event)
+		// e.processCRIEvent(event)
+		// if event.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+		// 	close(ch)
+		// }
+	}
+}
+
+func (e *EventedPLEG) handleEvents() {
+	e.podProcessChan.Range(func(_, v any) bool {
+		ch := v.(*lockedEventChannel)
+		go e.processPodEvent(ch)
+		return true
+	})
+}
+
+func (e *EventedPLEG) processPodEvent(lChan *lockedEventChannel) {
+	if len(lChan.channel) > 0 {
+		couldLock := lChan.TryLock()
+		if !couldLock {
+			return
+		}
+
+		event := <-lChan.channel
 		e.updatePodStatus(event)
 		e.processCRIEvent(event)
+		lChan.Unlock()
 	}
 }
 
