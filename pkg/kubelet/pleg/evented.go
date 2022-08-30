@@ -68,6 +68,12 @@ type EventedPLEG struct {
 	stopCh chan struct{}
 
 	runningMu sync.Mutex
+
+	podEventQueue        map[types.UID]chan *runtimeapi.ContainerEventResponse
+	podProcessEventQueue map[types.UID]func(podEventsQueue chan *runtimeapi.ContainerEventResponse)
+
+	lock1 sync.Mutex
+	lock2 sync.Mutex
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
@@ -83,6 +89,8 @@ func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.Ru
 		eventedPlegMaxStreamRetries: eventedPlegMaxStreamRetries,
 		genericPlegRelistPeriod:     genericPlegRelistPeriod,
 		genericPlegRelistThreshold:  genericPlegRelistThreshold,
+		podEventQueue:               make(map[types.UID]chan *runtimeapi.ContainerEventResponse),
+		podProcessEventQueue:        make(map[types.UID]func(podEventsQueue chan *runtimeapi.ContainerEventResponse)),
 		clock:                       clock,
 	}
 }
@@ -183,8 +191,36 @@ func (e *EventedPLEG) watchEventsChannel() {
 
 func (e *EventedPLEG) processCRIEvents(containerEventsResponseCh chan *runtimeapi.ContainerEventResponse) {
 	for event := range containerEventsResponseCh {
-		e.updatePodStatus(event)
-		e.processCRIEvent(event)
+		if _, ok := e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)]; !ok {
+			e.lock1.Lock()
+			e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)] = make(chan *runtimeapi.ContainerEventResponse, 100)
+			e.lock1.Unlock()
+		}
+
+		podQueue := e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)]
+		podQueue <- event
+
+		if _, ok := e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)]; !ok {
+			e.lock2.Lock()
+			e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)] = func(podEventsQueue chan *runtimeapi.ContainerEventResponse) {
+				for podEvent := range podEventsQueue {
+					e.updatePodStatus(podEvent)
+					e.processCRIEvent(podEvent)
+					if podEvent.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+						e.lock1.Lock()
+						delete(e.podEventQueue, types.UID(podEvent.PodSandboxMetadata.Uid))
+						e.lock1.Unlock()
+						e.lock2.Lock()
+						delete(e.podProcessEventQueue, types.UID(podEvent.PodSandboxMetadata.Uid))
+						e.lock2.Unlock()
+						close(podEventsQueue)
+						return
+					}
+				}
+			}
+			e.lock2.Unlock()
+			go e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)](podQueue)
+		}
 	}
 }
 
