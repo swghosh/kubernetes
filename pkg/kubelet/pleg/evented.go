@@ -68,6 +68,12 @@ type EventedPLEG struct {
 	stopCh chan struct{}
 
 	runningMu sync.Mutex
+
+	podEventQueue        map[types.UID]chan *runtimeapi.ContainerEventResponse
+	podProcessEventQueue map[types.UID]func(podEventsQueue chan *runtimeapi.ContainerEventResponse)
+
+	lock1 sync.Mutex
+	lock2 sync.Mutex
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
@@ -83,6 +89,8 @@ func NewEventedPLEG(runtime kubecontainer.Runtime, runtimeService internalapi.Ru
 		eventedPlegMaxStreamRetries: eventedPlegMaxStreamRetries,
 		genericPlegRelistPeriod:     genericPlegRelistPeriod,
 		genericPlegRelistThreshold:  genericPlegRelistThreshold,
+		podEventQueue:               make(map[types.UID]chan *runtimeapi.ContainerEventResponse),
+		podProcessEventQueue:        make(map[types.UID]func(podEventsQueue chan *runtimeapi.ContainerEventResponse)),
 		clock:                       clock,
 	}
 }
@@ -181,10 +189,40 @@ func (e *EventedPLEG) watchEventsChannel() {
 	e.processCRIEvents(containerEventsResponseCh)
 }
 
+// Experimantal - Process the events for the given pod in the order they arrive
 func (e *EventedPLEG) processCRIEvents(containerEventsResponseCh chan *runtimeapi.ContainerEventResponse) {
 	for event := range containerEventsResponseCh {
-		e.updatePodStatus(event)
-		e.processCRIEvent(event)
+		if _, ok := e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)]; !ok {
+			e.lock1.Lock() // TODO - better variable name for the lock
+			e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)] = make(chan *runtimeapi.ContainerEventResponse, 100)
+			e.lock1.Unlock()
+		}
+
+		podQueue := e.podEventQueue[types.UID(event.PodSandboxMetadata.Uid)]
+		podQueue <- event
+
+		if _, ok := e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)]; !ok {
+			e.lock2.Lock()
+			e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)] = func(podEventsQueue chan *runtimeapi.ContainerEventResponse) {
+				for podEvent := range podEventsQueue {
+					e.updatePodStatus(podEvent)
+					// e.processCRIEvent(podEvent)
+					if podEvent.ContainerEventType == runtimeapi.ContainerEventType_CONTAINER_DELETED_EVENT {
+						e.lock1.Lock()
+						delete(e.podEventQueue, types.UID(podEvent.PodSandboxMetadata.Uid))
+						e.lock1.Unlock()
+						e.lock2.Lock()
+						delete(e.podProcessEventQueue, types.UID(podEvent.PodSandboxMetadata.Uid))
+						e.lock2.Unlock()
+						// close(podEventsQueue)
+						break
+					}
+				}
+				close(podEventsQueue)
+			}
+			e.lock2.Unlock()
+			go e.podProcessEventQueue[types.UID(event.PodSandboxMetadata.Uid)](podQueue)
+		}
 	}
 }
 
@@ -285,6 +323,21 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 	timestamp := e.clock.Now()
 	status, err := e.runtime.GetPodStatus(podID, podName, podNamespace)
 
+	// A very hacky way to retry fetching the pod
+	for i := 0; i < 5; i++ {
+		if !e.isValidateEvent(event, status) {
+			// Experimental - giving some time for the CRI runtime to settle down
+			// TODO - This needs to be handled better with a recurssive call until we
+			// get the right pod status
+			time.Sleep(1 * time.Second)
+
+			// TODO - If you get the error below, return the error and exit
+			status, err = e.runtime.GetPodStatus(podID, podName, podNamespace)
+		} else {
+			break
+		}
+	}
+
 	if err != nil {
 		// nolint:logcheck // Not using the result of klog.V inside the
 		// if branch is okay, we just use it to determine whether the
@@ -307,13 +360,6 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		status.IPs = e.getPodIPs(podID, status)
 	}
 
-	// TODO - Disabling it until we fix the issue with inconsistent pod status
-	// if !e.isValidateEvent(event, status) {
-	// 	klog.ErrorS(err, "Evented PLEG: Invalid event received", "event", event, "podStatus", status)
-	// 	e.Relist() // Force relisting to make sure the pod statuses are up to date.
-	// 	return
-	// }
-
 	e.updateRunningPodMetric(status)
 	e.updateRunningContainerMetric(status)
 
@@ -327,6 +373,8 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 		e.cache.Set(podID, status, err, timestamp)
 	}
 	e.cache.UpdateTime(timestamp)
+
+	e.processCRIEvent(event)
 }
 
 func (e *EventedPLEG) processCRIEvent(event *runtimeapi.ContainerEventResponse) {

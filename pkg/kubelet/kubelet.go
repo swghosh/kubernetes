@@ -165,8 +165,8 @@ const (
 	genericPlegRelistThreshold = time.Minute * 3
 
 	// Pleg relist period and threshold for Evented PLEG.
-	eventedPlegRelistPeriod     = time.Second * 300
-	eventedPlegRelistThreshold  = time.Minute * 10
+	eventedPlegRelistPeriod     = time.Second * 30000
+	eventedPlegRelistThreshold  = time.Minute * 1000
 	eventedPlegMaxStreamRetries = 5
 
 	// backOffPeriod is the period to back off when pod syncing results in an
