@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 )
 
 // Cache stores the PodStatus for the pods. It represents *all* the visible
@@ -144,11 +145,13 @@ func (c *cache) getIfNewerThan(id types.UID, minTime time.Time) *data {
 	d, ok := c.pods[id]
 	globalTimestampIsNewer := (c.timestamp != nil && c.timestamp.After(minTime))
 	if !ok && globalTimestampIsNewer {
+		klog.V(4).InfoS("[swghosh] Empty item in cache, making default data", "podUID", id)
 		// Status is not cached, but the global timestamp is newer than
 		// minTime, return the default status.
 		return makeDefaultData(id)
 	}
 	if ok && (d.modified.After(minTime) || globalTimestampIsNewer) {
+		klog.V(4).InfoS("[swghosh] Either cache item timestamp or global timestamp is ahead of timestamp during get", "podUID", id)
 		// Status is cached, return status if either of the following is true.
 		//   * status was modified after minTime
 		//   * the global timestamp of the cache is newer than minTime.
@@ -173,6 +176,8 @@ func (c *cache) notify(id types.UID, timestamp time.Time) {
 			newList = append(newList, list[i])
 			continue
 		}
+
+		klog.V(4).InfoS("[swghosh] Cache notify can send pod status as get timestamp is ahead of subscribed timestamp", "podUID", id)
 		r.ch <- c.get(id)
 		close(r.ch)
 	}
@@ -191,8 +196,10 @@ func (c *cache) subscribe(id types.UID, timestamp time.Time) chan *data {
 	if d != nil {
 		// If the cache entry is ready, send the data and return immediately.
 		ch <- d
+		klog.V(4).InfoS("[swghosh] Sent data over channel as getIfNewerThan suceeded", "podUID", id)
 		return ch
 	}
+	klog.V(4).InfoS("[swghosh] Could not send data over channel as getIfNewerThan returned nil, instead used a subscriber", "podUID", id)
 	// Add the subscription record.
 	c.subscribers[id] = append(c.subscribers[id], &subRecord{time: timestamp, ch: ch})
 	return ch

@@ -113,6 +113,11 @@ func (e *EventedPLEG) Start() {
 	if !IsEventedPLEGInUse {
 		IsEventedPLEGInUse = true
 		e.stopCh = make(chan struct{})
+		// cache: silly function
+		// go wait.Forever(func() {
+		// 	e.cache.UpdateTime(e.clock.Now())
+		// }, 1*time.Second)
+
 		go wait.Until(e.watchEventsChannel, 0, e.stopCh)
 	}
 }
@@ -372,7 +377,8 @@ func (e *EventedPLEG) updatePodStatus(event *runtimeapi.ContainerEventResponse) 
 	} else {
 		e.cache.Set(podID, status, err, timestamp)
 	}
-	e.cache.UpdateTime(timestamp)
+	// cache: not updating global timestamp
+	e.cache.UpdateTime(e.clock.Now().Add(1 * time.Nanosecond))
 
 	e.processCRIEvent(event)
 }

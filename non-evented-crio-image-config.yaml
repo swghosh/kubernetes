@@ -1,0 +1,6 @@
+images:
+  fedora:
+    image_family: fedora-coreos-stable
+    project: fedora-coreos-cloud 
+    metadata: "user-data</home/swghosh/Desktop/pleg/crio-swghosh-20220901-eae57413.ign"
+
