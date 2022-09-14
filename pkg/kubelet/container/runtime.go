@@ -122,6 +122,8 @@ type Runtime interface {
 	// CheckpointContainer tells the runtime to checkpoint a container
 	// and store the resulting archive to the checkpoint directory.
 	CheckpointContainer(options *runtimeapi.CheckpointContainerRequest) error
+	// Generate pod status from the CRI event
+	GeneratePodStatus(event *runtimeapi.ContainerEventResponse) (*PodStatus, error)
 }
 
 // StreamingRuntime is the interface implemented by runtimes that handle the serving of the

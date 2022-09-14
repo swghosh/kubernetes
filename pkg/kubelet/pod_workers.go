@@ -923,6 +923,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 				//  API server (thus losing the exit code).
 				status, err = p.podCache.GetNewerThan(pod.UID, lastSyncTime)
 			}
+
 			if err != nil {
 				// This is the legacy event thrown by manage pod loop all other events are now dispatched
 				// from syncPodFn
@@ -951,6 +952,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 			}
 
 			lastSyncTime = time.Now()
+
 			return err
 		}()
 

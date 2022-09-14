@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
@@ -956,6 +957,50 @@ func (m *kubeGenericRuntimeManager) killPodWithSyncResult(pod *v1.Pod, runningPo
 	}
 
 	return
+}
+
+func (m *kubeGenericRuntimeManager) GeneratePodStatus(event *runtimeapi.ContainerEventResponse) (*kubecontainer.PodStatus, error) {
+
+	if len(event.PodSandboxStatuses) < 1 {
+		return nil, fmt.Errorf("no sandbox containers present in the CRI event %v", event)
+	}
+
+	podIPs := m.determinePodSandboxIPs(event.PodSandboxMetadata.Namespace, event.PodSandboxMetadata.Name, event.PodSandboxStatuses[0])
+
+	kubeContainerStatuses := []*kubecontainer.Status{}
+	for _, status := range event.ContainersStatuses {
+		cStatus := toKubeContainerStatus(status, m.runtimeName)
+		if status.State == runtimeapi.ContainerState_CONTAINER_EXITED {
+			// Populate the termination message if needed.
+			annotatedInfo := getContainerInfoFromAnnotations(status.Annotations)
+			// If a container cannot even be started, it certainly does not have logs, so no need to fallbackToLogs.
+			fallbackToLogs := annotatedInfo.TerminationMessagePolicy == v1.TerminationMessageFallbackToLogsOnError &&
+				cStatus.ExitCode != 0 && cStatus.Reason != "ContainerCannotRun"
+			tMessage, checkLogs := getTerminationMessage(status, annotatedInfo.TerminationMessagePath, fallbackToLogs)
+			if checkLogs {
+				tMessage = m.readLastStringFromContainerLogs(status.GetLogPath())
+			}
+			// Enrich the termination message written by the application is not empty
+			if len(tMessage) != 0 {
+				if len(cStatus.Message) != 0 {
+					cStatus.Message += ": "
+				}
+				cStatus.Message += tMessage
+			}
+		}
+		kubeContainerStatuses = append(kubeContainerStatuses, cStatus)
+	}
+
+	sort.Sort(containerStatusByCreated(kubeContainerStatuses))
+
+	return &kubecontainer.PodStatus{
+		ID:                kubetypes.UID(event.PodSandboxMetadata.Uid),
+		Name:              event.PodSandboxMetadata.Name,
+		Namespace:         event.PodSandboxMetadata.Namespace,
+		IPs:               podIPs,
+		SandboxStatuses:   event.PodSandboxStatuses,
+		ContainerStatuses: kubeContainerStatuses,
+	}, nil
 }
 
 // GetPodStatus retrieves the status of the pod, including the

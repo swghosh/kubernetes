@@ -197,6 +197,14 @@ func (mr *MockRuntimeMockRecorder) GetImageRef(image interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImageRef", reflect.TypeOf((*MockRuntime)(nil).GetImageRef), image)
 }
 
+func (m *MockRuntime) GeneratePodStatus(event *v10.ContainerEventResponse) (*container.PodStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPodStatus", event.PodSandboxMetadata.Uid, event.PodSandboxMetadata.Name, event.PodSandboxMetadata.Namespace)
+	ret0, _ := ret[0].(*container.PodStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // GetPodStatus mocks base method.
 func (m *MockRuntime) GetPodStatus(uid types.UID, name, namespace string) (*container.PodStatus, error) {
 	m.ctrl.T.Helper()
