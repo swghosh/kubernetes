@@ -17,6 +17,8 @@ limitations under the License.
 package pleg
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -52,6 +54,9 @@ type PodLifecycleEvent struct {
 // PodLifecycleEventGenerator contains functions for generating pod life cycle events.
 type PodLifecycleEventGenerator interface {
 	Start()
+	Stop()
+	Update(relistingPeriod time.Duration, relistThreshold time.Duration)
 	Watch() chan *PodLifecycleEvent
 	Healthy() (bool, error)
+	Relist()
 }
