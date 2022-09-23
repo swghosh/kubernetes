@@ -98,6 +98,11 @@ func (e *EventedPLEG) Relist() {
 	e.genericPleg.Relist()
 }
 
+func (e *EventedPLEG) hackyRoutine() {
+	klog.V(4).InfoS("[debug_pleg] I'm gonna push the cache ahead for GetNewerThan to work.")
+	e.cache.UpdateTime(e.clock.Now())
+}
+
 // Start spawns a goroutine to relist periodically.
 func (e *EventedPLEG) Start() {
 	e.runningMu.Lock()
@@ -106,6 +111,7 @@ func (e *EventedPLEG) Start() {
 		IsEventedPLEGInUse = true
 		e.stopCh = make(chan struct{})
 		go wait.Until(e.watchEventsChannel, 0, e.stopCh)
+		go wait.Forever(e.hackyRoutine, 30*time.Second)
 	}
 }
 

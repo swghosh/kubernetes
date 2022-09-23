@@ -597,7 +597,9 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 			klog.V(4).InfoS("[debug_pleg] Placeholder 5 - cache.Get called, should be empty?", "podStatus", statusCache)
 			if err == nil {
 				klog.V(4).InfoS("[debug_pleg] Placeholder 3 - cache.Get called")
+				klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder1")
 				if isPodStatusCacheTerminal(statusCache) {
+					klog.V(4).InfoS("[debug_pleg] XTerminatedAtPlaceholder1")
 					status = &podSyncStatus{
 						terminatedAt:       now,
 						terminatingAt:      now,
@@ -638,15 +640,19 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		case isRuntimePod:
 			klog.V(4).InfoS("Pod is orphaned and must be torn down", "pod", klog.KObj(pod), "podUID", pod.UID)
 			status.deleted = true
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder2")
 			status.terminatingAt = now
 			becameTerminating = true
 		case pod.DeletionTimestamp != nil:
 			klog.V(4).InfoS("Pod is marked for graceful deletion, begin teardown", "pod", klog.KObj(pod), "podUID", pod.UID)
 			status.deleted = true
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder3")
 			status.terminatingAt = now
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder3 Bad timestamp here?", "now", now, "terminatedAt", status.terminatingAt)
 			becameTerminating = true
 		case pod.Status.Phase == v1.PodFailed, pod.Status.Phase == v1.PodSucceeded:
 			klog.V(4).InfoS("Pod is in a terminal phase (success/failed), begin teardown", "pod", klog.KObj(pod), "podUID", pod.UID)
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder4")
 			status.terminatingAt = now
 			becameTerminating = true
 		case options.UpdateType == kubetypes.SyncPodKill:
@@ -656,11 +662,13 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 			} else {
 				klog.V(4).InfoS("Pod is being removed by the kubelet, begin teardown", "pod", klog.KObj(pod), "podUID", pod.UID)
 			}
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder4")
 			status.terminatingAt = now
 			becameTerminating = true
 		}
 	}
 
+	klog.V(4).InfoS("[debug_pleg] After TerminatingPlaceHolder, wrong timestamp here? Not wrong.", "terminatedAt", status.terminatedAt)
 	// once a pod is terminating, all updates are kills and the grace period can only decrease
 	var workType PodWorkType
 	var wasGracePeriodShortened bool
@@ -670,6 +678,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		// due to housekeeping seeing an older cached version of the runtime pod simply ignore it until
 		// after the pod worker completes.
 		if isRuntimePod {
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceHolder: I am here!")
 			klog.V(3).InfoS("Pod is waiting for termination, ignoring runtime-only kill until after pod worker is fully terminated", "pod", klog.KObj(pod), "podUID", pod.UID)
 			return
 		}
@@ -685,6 +694,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		options.KillPodOptions = nil
 
 	case status.IsTerminationRequested():
+		klog.V(4).InfoS("[debug_pleg] status.IsTerminationRequested(); workType = TerminatingPodWork - getting in now")
 		workType = TerminatingPodWork
 		if options.KillPodOptions == nil {
 			options.KillPodOptions = &KillPodOptions{}
@@ -704,6 +714,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		// always set the grace period for syncTerminatingPod so we don't have to recalculate,
 		// will never be zero.
 		options.KillPodOptions.PodTerminationGracePeriodSecondsOverride = &gracePeriod
+		klog.V(4).InfoS("[debug_pleg] status.IsTerminationRequested(); workType = TerminatingPodWork - getting out now")
 
 	default:
 		workType = SyncPodWork
@@ -723,6 +734,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		Options:  options,
 	}
 
+	klog.V(4).InfoS("[debug_pleg] Can we reach here? #1")
 	// start the pod worker goroutine if it doesn't exist
 	podUpdates, exists := p.podUpdates[uid]
 	if !exists {
@@ -753,13 +765,16 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		// comment in syncPod.
 		go func() {
 			defer runtime.HandleCrash()
+			klog.V(4).InfoS("[debug_pleg] Please handle pod loop for me!")
 			p.managePodLoop(outCh)
 		}()
 	}
+	klog.V(4).InfoS("[debug_pleg] Can we reach here? #2")
 
 	// dispatch a request to the pod worker if none are running
 	if !status.IsWorking() {
 		status.working = true
+		klog.V(4).InfoS("[debug_pleg] Send pod work", "updateType", work.WorkType)
 		podUpdates <- work
 		return
 	}
@@ -929,9 +944,11 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 				//  API server (thus losing the exit code).
 				klog.V(4).InfoS("[debug_pleg] Call to GetNewerThan", "podID", pod.UID, "updateType", update.WorkType)
 				status, err = p.podCache.GetNewerThan(pod.UID, lastSyncTime)
+				klog.V(4).InfoS("[debug_pleg] I am not stuck at GetNewerThan!")
 			}
 
 			if err != nil {
+				klog.V(4).InfoS("[debug_pleg] Any errors?")
 				// This is the legacy event thrown by manage pod loop all other events are now dispatched
 				// from syncPodFn
 				p.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedSync, "error determining status: %v", err)
@@ -946,6 +963,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 				err = p.syncTerminatedPodFn(ctx, pod, status)
 
 			case update.WorkType == TerminatingPodWork:
+				klog.V(4).InfoS("[debug_pleg] Inside TerminatingPodWork")
 				var gracePeriod *int64
 				if opt := update.Options.KillPodOptions; opt != nil {
 					gracePeriod = opt.PodTerminationGracePeriodSecondsOverride
@@ -1016,6 +1034,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 // the termination state so that other components know no new containers will be started in this
 // pod. It then returns the status function, if any, that applies to this pod.
 func (p *podWorkers) acknowledgeTerminating(pod *v1.Pod) PodStatusFunc {
+	klog.V(4).InfoS("[debug_pleg] acknowledgeTerminating()")
 	p.podLock.Lock()
 	defer p.podLock.Unlock()
 
@@ -1047,6 +1066,7 @@ func (p *podWorkers) completeSync(pod *v1.Pod) {
 
 	if status, ok := p.podSyncStatuses[pod.UID]; ok {
 		if status.terminatingAt.IsZero() {
+			klog.V(4).InfoS("[debug_pleg] TerminatingPlaceholder5")
 			status.terminatingAt = time.Now()
 		} else {
 			klog.V(4).InfoS("Pod worker attempted to set terminatingAt twice, likely programmer error", "pod", klog.KObj(pod), "podUID", pod.UID)
@@ -1067,6 +1087,7 @@ func (p *podWorkers) completeSync(pod *v1.Pod) {
 // cleanup.  This updates the termination state which prevents future syncs and will ensure
 // other kubelet loops know this pod is not running any containers.
 func (p *podWorkers) completeTerminating(pod *v1.Pod) {
+	klog.V(4).InfoS("[debug_pleg] completeTerminating()")
 	p.podLock.Lock()
 	defer p.podLock.Unlock()
 
@@ -1076,6 +1097,7 @@ func (p *podWorkers) completeTerminating(pod *v1.Pod) {
 		if status.terminatingAt.IsZero() {
 			klog.V(4).InfoS("Pod worker was terminated but did not have terminatingAt set, likely programmer error", "pod", klog.KObj(pod), "podUID", pod.UID)
 		}
+		klog.V(4).InfoS("[debug_pleg] XTerminatedAtPlaceholder2", "stack", debug.Stack())
 		status.terminatedAt = time.Now()
 		for _, ch := range status.notifyPostTerminating {
 			close(ch)
@@ -1085,7 +1107,6 @@ func (p *podWorkers) completeTerminating(pod *v1.Pod) {
 	}
 
 	klog.V(4).InfoS("[debug_pleg] Place 2 updateType=2", "podUID", pod.UID, "stack", debug.Stack())
-	klog.V(4).InfoS(string(debug.Stack()), "", "")
 	p.lastUndeliveredWorkUpdate[pod.UID] = podWork{
 		WorkType: TerminatedPodWork,
 		Options: UpdatePodOptions{
@@ -1109,6 +1130,7 @@ func (p *podWorkers) completeTerminatingRuntimePod(pod *v1.Pod) {
 		if status.terminatingAt.IsZero() {
 			klog.V(4).InfoS("Pod worker was terminated but did not have terminatingAt set, likely programmer error", "pod", klog.KObj(pod), "podUID", pod.UID)
 		}
+		klog.V(4).InfoS("[debug_pleg] XTerminatedAtPlaceholder3")
 		status.terminatedAt = time.Now()
 		status.finished = true
 		status.working = false
@@ -1167,6 +1189,7 @@ func (p *podWorkers) completeUnstartedTerminated(pod *v1.Pod) {
 		status.finished = true
 		status.working = false
 		status.terminatedAt = time.Now()
+		klog.V(4).InfoS("[debug_pleg] XTerminatedAtPlaceholder4")
 
 		if p.startedStaticPodsByFullname[status.fullname] == pod.UID {
 			delete(p.startedStaticPodsByFullname, status.fullname)
