@@ -19,6 +19,7 @@ package kubelet
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -581,6 +582,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 	// decide what to do with this pod - we are either setting it up, tearing it down, or ignoring it
 	now := time.Now()
 	status, ok := p.podSyncStatuses[uid]
+	klog.V(4).InfoS("[debug_pleg] Placeholder 4", "podStatus", status)
 	if !ok {
 		klog.V(4).InfoS("Pod is being synced for the first time", "pod", klog.KObj(pod), "podUID", pod.UID)
 		status = &podSyncStatus{
@@ -591,7 +593,10 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		if !isRuntimePod && (pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded) {
 			// check to see if the pod is not running and the pod is terminal.
 			// If this succeeds then record in the podWorker that it is terminated.
-			if statusCache, err := p.podCache.Get(pod.UID); err == nil {
+			statusCache, err := p.podCache.Get(pod.UID)
+			klog.V(4).InfoS("[debug_pleg] Placeholder 5 - cache.Get called, should be empty?", "podStatus", statusCache)
+			if err == nil {
+				klog.V(4).InfoS("[debug_pleg] Placeholder 3 - cache.Get called")
 				if isPodStatusCacheTerminal(statusCache) {
 					status = &podSyncStatus{
 						terminatedAt:       now,
@@ -669,6 +674,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 			return
 		}
 
+		klog.V(4).InfoS("[debug_pleg] Place 1 updateType=2", "podUID", pod.UID, "stack", debug.Stack())
 		workType = TerminatedPodWork
 
 		if options.KillPodOptions != nil {
@@ -921,6 +927,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 				//  Improving this latency also reduces the possibility that a terminated
 				//  container's status is garbage collected before we have a chance to update the
 				//  API server (thus losing the exit code).
+				klog.V(4).InfoS("[debug_pleg] Call to GetNewerThan", "podID", pod.UID, "updateType", update.WorkType)
 				status, err = p.podCache.GetNewerThan(pod.UID, lastSyncTime)
 			}
 
@@ -1077,6 +1084,8 @@ func (p *podWorkers) completeTerminating(pod *v1.Pod) {
 		status.statusPostTerminating = nil
 	}
 
+	klog.V(4).InfoS("[debug_pleg] Place 2 updateType=2", "podUID", pod.UID, "stack", debug.Stack())
+	klog.V(4).InfoS(string(debug.Stack()), "", "")
 	p.lastUndeliveredWorkUpdate[pod.UID] = podWork{
 		WorkType: TerminatedPodWork,
 		Options: UpdatePodOptions{

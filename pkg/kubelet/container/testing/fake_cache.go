@@ -47,5 +47,9 @@ func (c *fakeCache) Set(id types.UID, status *container.PodStatus, err error, ti
 func (c *fakeCache) Delete(id types.UID) {
 }
 
+func (c *fakeCache) Len() int {
+	return 0
+}
+
 func (c *fakeCache) UpdateTime(_ time.Time) {
 }

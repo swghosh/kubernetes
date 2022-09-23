@@ -238,6 +238,7 @@ func (g *GenericPLEG) relist() {
 
 	// Get all the pods.
 	podList, err := g.runtime.GetPods(true)
+	klog.V(4).InfoS("[debug_pleg] Generic pleg: runtime has", "num_pods", len(podList))
 	if err != nil {
 		klog.ErrorS(err, "GenericPLEG: Unable to retrieve pods")
 		return
@@ -312,6 +313,7 @@ func (g *GenericPLEG) relist() {
 			}
 			select {
 			case g.eventChannel <- events[i]:
+				klog.V(4).InfoS("[debug_pleg] Sending generic PLEG event", "podID", events[i].ID, "plegEventType", events[i].Type)
 			default:
 				metrics.PLEGDiscardEvents.Inc()
 				klog.ErrorS(nil, "Event channel is full, discard this relist() cycle event")
@@ -357,6 +359,8 @@ func (g *GenericPLEG) relist() {
 
 	// make sure we retain the list of pods that need reinspecting the next time relist is called
 	g.podsToReinspect = needsReinspection
+
+	klog.V(4).InfoS("[debug_pleg] Number of pods in cache", "numCachePods", g.cache.Len())
 }
 
 func getContainersFromPods(pods ...*kubecontainer.Pod) []*kubecontainer.Container {

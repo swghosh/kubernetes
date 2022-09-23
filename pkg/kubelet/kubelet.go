@@ -165,8 +165,8 @@ const (
 	genericPlegRelistThreshold = time.Minute * 3
 
 	// Pleg relist period and threshold for Evented PLEG.
-	eventedPlegRelistPeriod     = time.Second * 300
-	eventedPlegRelistThreshold  = time.Minute * 10
+	eventedPlegRelistPeriod     = time.Second * 3000
+	eventedPlegRelistThreshold  = time.Minute * 100
 	eventedPlegMaxStreamRetries = 5
 
 	// backOffPeriod is the period to back off when pod syncing results in an
@@ -2162,6 +2162,7 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			}
 		}
 	case <-syncCh:
+		klog.V(4).InfoS("[debug_pleg] Not in pleg channel but in sync channel")
 		// Sync pods waiting for sync
 		podsToSync := kl.getPodsToSync()
 		if len(podsToSync) == 0 {
@@ -2192,6 +2193,7 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		}
 		handleProbeSync(kl, update, handler, "startup", status)
 	case <-housekeepingCh:
+		klog.V(4).InfoS("[debug_pleg] Not in pleg channel but in housekeeping channel")
 		if !kl.sourcesReady.AllReady() {
 			// If the sources aren't ready or volume manager has not yet synced the states,
 			// skip housekeeping, as we may accidentally delete pods from unready sources.

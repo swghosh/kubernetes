@@ -42,6 +42,8 @@ type Cache interface {
 	GetNewerThan(types.UID, time.Time) (*PodStatus, error)
 	Delete(types.UID)
 	UpdateTime(time.Time)
+	// Len gives number of pods present in pod cache
+	Len() int
 }
 
 type data struct {
@@ -202,4 +204,8 @@ func (c *cache) subscribe(id types.UID, timestamp time.Time) chan *data {
 	// Add the subscription record.
 	c.subscribers[id] = append(c.subscribers[id], &subRecord{time: timestamp, ch: ch})
 	return ch
+}
+
+func (c *cache) Len() int {
+	return len(c.pods)
 }

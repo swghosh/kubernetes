@@ -281,6 +281,7 @@ func (e *EventedPLEG) getPodIPs(pid types.UID, status *kubecontainer.PodStatus) 
 func (e *EventedPLEG) sendPodLifecycleEvent(event *PodLifecycleEvent) {
 	select {
 	case e.eventChannel <- event:
+		klog.V(4).InfoS("[debug_pleg] Sending evented PLEG event", "podID", event.ID, "plegEventType", event.Type)
 	default:
 		// record how many events were discarded due to channel out of capacity
 		metrics.PLEGDiscardEvents.Inc()
