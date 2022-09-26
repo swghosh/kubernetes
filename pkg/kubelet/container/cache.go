@@ -88,6 +88,10 @@ func (c *cache) Get(id types.UID) (*PodStatus, error) {
 }
 
 func (c *cache) GetNewerThan(id types.UID, minTime time.Time) (*PodStatus, error) {
+	if _, ok := c.pods[id]; !ok {
+		data := makeDefaultData(id)
+		return data.status, data.err
+	}
 	ch := c.subscribe(id, minTime)
 	d := <-ch
 	return d.status, d.err
