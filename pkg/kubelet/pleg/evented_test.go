@@ -125,6 +125,67 @@ kubelet_running_pods 3
 	testMetric(t, expectedMetric, metrics.RunningPodCount.FQName())
 }
 
+func TestSendPodLifeCycleEvent(t *testing.T) {
+	metrics.Register()
+
+	_, _, events := createTestPodsStatusesAndEvents(100)
+	tests := []struct {
+		name           string
+		existingEvents []*PodLifecycleEvent
+		nextEvent      *PodLifecycleEvent
+		metricWants    string
+	}{
+		{
+			name:           "send to channel containing no events",
+			existingEvents: nil,
+			nextEvent:      events[0],
+			metricWants: `
+# HELP kubelet_pleg_discard_events [ALPHA] The number of discard events in PLEG.
+# TYPE kubelet_pleg_discard_events counter
+kubelet_pleg_discard_events_total 0
+`,
+		},
+		{
+			name:           "send to channel containing 5 events",
+			existingEvents: events[:5],
+			nextEvent:      events[6],
+			metricWants: `
+# HELP kubelet_pleg_discard_events [ALPHA] The number of discard events in PLEG.
+# TYPE kubelet_pleg_discard_events counter
+kubelet_pleg_discard_events_total 0
+`,
+		},
+		{
+			name:           "send to channel that is out of capacity",
+			existingEvents: events,
+			nextEvent:      events[0],
+			metricWants: `
+# HELP kubelet_pleg_discard_events [ALPHA] The number of discard events in PLEG.
+# TYPE kubelet_pleg_discard_events counter
+kubelet_pleg_discard_events_total 1
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pleg := newTestEventedPLEG()
+			for _, event := range test.existingEvents {
+				pleg.eventChannel <- event
+			}
+
+			pleg.sendPodLifecycleEvent(test.nextEvent)
+			if err := testutil.GatherAndCompare(
+				metrics.GetGather(),
+				strings.NewReader(test.metricWants),
+				metrics.PLEGDiscardEvents.FQName(),
+			); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func testMetric(t *testing.T, expectedMetric string, metricName string) {
 	err := testutil.GatherAndCompare(metrics.GetGather(), strings.NewReader(expectedMetric), metricName)
 	if err != nil {
