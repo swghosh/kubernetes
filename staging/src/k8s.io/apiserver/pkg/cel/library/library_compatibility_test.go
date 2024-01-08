@@ -46,7 +46,7 @@ func TestLibraryCompatibility(t *testing.T) {
 		// Kubernetes <1.28>:
 		"errored", "error",
 		// Kubernetes <1.30>:
-		"ip", "family", "isUnspecified", "isLoopback", "isLinkLocalMulticast", "isLinkLocalUnicast", "isGlobalUnicast", "ip.isCanonical", "isIP", "cidr", "containsIP", "containsCIDR", "masked", "prefixLength", "isCIDR", "string",
+		"ip", "family", "isUnspecified", "isLoopback", "isLinkLocalMulticast", "isLinkLocalUnicast", "isGlobalUnicast", "ip.isCanonical", "isIP", "cidr", "containsIP", "containsCIDR", "masked", "prefixLength", "isCIDR",
 		// Kubernetes <1.??>:
 	)
 
