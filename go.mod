@@ -55,10 +55,10 @@ require (
 	github.com/onsi/gomega v1.27.6
 	github.com/opencontainers/runc v1.1.9
 	github.com/opencontainers/selinux v1.10.0
-	github.com/openshift/api v0.0.0-20230915112357-693d4b64813c
+	github.com/openshift/api v0.0.0-20240116035456-11ed2fbcb805
 	github.com/openshift/apiserver-library-go v0.0.0-20230927115548-521857444d9a
 	github.com/openshift/client-go v0.0.0-20230926161409-848405da69e1
-	github.com/openshift/library-go v0.0.0-20230927113136-405c34317fa4
+	github.com/openshift/library-go v0.0.0-20240117151256-95b334bccb5d
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.16.0
