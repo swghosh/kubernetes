@@ -11,10 +11,12 @@ import (
 	osinv1 "github.com/openshift/api/osin/v1"
 	"github.com/openshift/apiserver-library-go/pkg/securitycontextconstraints/sccadmission"
 	"github.com/openshift/library-go/pkg/config/helpers"
+	openshiftfeatures "github.com/openshift/library-go/pkg/features"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/clientcmd/api"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	"k8s.io/kubernetes/openshift-kube-apiserver/configdefault"
@@ -23,6 +25,12 @@ import (
 	kubelettypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac/bootstrappolicy"
 )
+
+// OpenShiftKubeAPIServerFeatureGates contains list of feature gates that
+// will be honored by openshift-kube-apiserver
+var OpenShiftKubeAPIServerFeatureGates []configv1.FeatureGateName = []configv1.FeatureGateName{
+	configv1.FeatureGateRouteExternalCertificate,
+}
 
 func GetOpenshiftConfig(openshiftConfigFile string) (*kubecontrolplanev1.KubeAPIServerConfig, error) {
 	// try to decode into our new types first.  right now there is no validation, no file path resolution.  this unsticks the operator to start.
@@ -57,7 +65,7 @@ func GetOpenshiftConfig(openshiftConfigFile string) (*kubecontrolplanev1.KubeAPI
 	return config, nil
 }
 
-func ForceGlobalInitializationForOpenShift() {
+func ForceGlobalInitializationForOpenShift() error {
 	// This allows to move crqs, sccs, and rbrs to CRD
 	aggregatorapiserver.AddAlwaysLocalDelegateForPrefix("/apis/quota.openshift.io/v1/clusterresourcequotas")
 	aggregatorapiserver.AddAlwaysLocalDelegateForPrefix("/apis/security.openshift.io/v1/securitycontextconstraints")
@@ -87,6 +95,12 @@ func ForceGlobalInitializationForOpenShift() {
 	// we need to have the authorization chain place something before system:masters
 	// SkipSystemMastersAuthorizer disable implicitly added system/master authz, and turn it into another authz mode "SystemMasters", to be added via authorization-mode
 	authorizer.SkipSystemMastersAuthorizer()
+
+	// initialize openshift specific feature gates that o-kubeapiserver will honor
+	return openshiftfeatures.InitializeFeatureGates(
+		feature.DefaultMutableFeatureGate,
+		OpenShiftKubeAPIServerFeatureGates...,
+	)
 }
 
 var SCCAdmissionPlugin = sccadmission.NewConstraint()

@@ -138,7 +138,9 @@ cluster's shared state through which all other components interact.`,
 				// print merged flags (merged from OpenshiftConfig)
 				cliflag.PrintFlags(cmd.Flags())
 
-				enablement.ForceGlobalInitializationForOpenShift()
+				if err := enablement.ForceGlobalInitializationForOpenShift(); err != nil {
+					return err
+				}
 			} else {
 				// print default flags
 				cliflag.PrintFlags(cmd.Flags())
