@@ -28,6 +28,8 @@ import (
 	"os"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
+	openshiftfeatures "github.com/openshift/library-go/pkg/features"
 	"k8s.io/kubernetes/openshift-kube-apiserver/admission/admissionenablement"
 	"k8s.io/kubernetes/openshift-kube-apiserver/enablement"
 	"k8s.io/kubernetes/openshift-kube-apiserver/openshiftkubeapiserver"
@@ -82,6 +84,12 @@ import (
 	"k8s.io/kubernetes/pkg/serviceaccount"
 )
 
+// OpenShiftKubeAPIServerFeatureGates contains list of feature gates that
+// will be honored by openshift-kube-apiserver
+var OpenShiftKubeAPIServerFeatureGates []configv1.FeatureGateName = []configv1.FeatureGateName{
+	configv1.FeatureGateRouteExternalCertificate,
+}
+
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 }
@@ -119,6 +127,12 @@ cluster's shared state through which all other components interact.`,
 				// if we are running openshift, we modify the admission chain defaults accordingly
 				admissionenablement.InstallOpenShiftAdmissionPlugins(s)
 
+				// feature gates
+				openshiftfeatures.InitializeFeatureGates(
+					utilfeature.DefaultMutableFeatureGate,
+					OpenShiftKubeAPIServerFeatureGates...,
+				)
+
 				openshiftConfig, err := enablement.GetOpenshiftConfig(s.OpenShiftConfig)
 				if err != nil {
 					klog.Fatal(err)
@@ -138,9 +152,7 @@ cluster's shared state through which all other components interact.`,
 				// print merged flags (merged from OpenshiftConfig)
 				cliflag.PrintFlags(cmd.Flags())
 
-				if err := enablement.ForceGlobalInitializationForOpenShift(); err != nil {
-					return err
-				}
+				enablement.ForceGlobalInitializationForOpenShift()
 			} else {
 				// print default flags
 				cliflag.PrintFlags(cmd.Flags())
