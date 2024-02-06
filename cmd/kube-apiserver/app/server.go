@@ -90,7 +90,13 @@ var OpenShiftKubeAPIServerFeatureGates []configv1.FeatureGateName = []configv1.F
 	configv1.FeatureGateRouteExternalCertificate,
 }
 
+// FeatureGates contains list of feature gates that will be honored by openshift-kube-apiserver
+var FeatureGates = []configv1.FeatureGateName{
+	configv1.FeatureGateRouteExternalCertificate,
+}
+
 func init() {
+	klog.Warning("hopefully, will not cry this time in #0")
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 }
 
@@ -126,12 +132,6 @@ cluster's shared state through which all other components interact.`,
 			if len(s.OpenShiftConfig) > 0 {
 				// if we are running openshift, we modify the admission chain defaults accordingly
 				admissionenablement.InstallOpenShiftAdmissionPlugins(s)
-
-				// feature gates
-				openshiftfeatures.InitializeFeatureGates(
-					utilfeature.DefaultMutableFeatureGate,
-					OpenShiftKubeAPIServerFeatureGates...,
-				)
 
 				openshiftConfig, err := enablement.GetOpenshiftConfig(s.OpenShiftConfig)
 				if err != nil {
@@ -180,6 +180,13 @@ cluster's shared state through which all other components interact.`,
 			}
 			return nil
 		},
+	}
+
+	// // initialize openshift feature gates
+	if err := openshiftfeatures.InitializeFeatureGates(utilfeature.DefaultMutableFeatureGate,
+		FeatureGates...,
+	); err != nil {
+		klog.Fatal("crying in #1", "err", err)
 	}
 
 	fs := cmd.Flags()

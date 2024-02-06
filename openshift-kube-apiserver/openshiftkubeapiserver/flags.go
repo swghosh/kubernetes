@@ -46,14 +46,16 @@ func ConfigToFlags(kubeAPIServerConfig *kubecontrolplanev1.KubeAPIServerConfig) 
 	configflags.SetIfUnset(args, "tls-min-version", kubeAPIServerConfig.ServingInfo.MinTLSVersion)
 	configflags.SetIfUnset(args, "tls-sni-cert-key", sniCertKeys(kubeAPIServerConfig.ServingInfo.NamedCertificates)...)
 
-	// set the global featuregates.
 	warnings, err := features.SetFeatureGates(args, feature.DefaultMutableFeatureGate)
 	if err != nil {
+		klog.Fatal("crying in #2")
 		return nil, err
 	}
 	for _, warning := range warnings {
 		klog.Warning(warning)
 	}
+
+	klog.Warningf("#Y: %v\n", feature.DefaultMutableFeatureGate.GetAll())
 
 	return configflags.ToFlagSlice(args), nil
 }

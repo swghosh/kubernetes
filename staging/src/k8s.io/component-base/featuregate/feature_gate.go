@@ -19,6 +19,7 @@ package featuregate
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -320,6 +321,9 @@ func (f *featureGate) Enabled(key Feature) bool {
 
 // AddFlag adds a flag for setting global feature gates to the specified FlagSet.
 func (f *featureGate) AddFlag(fs *pflag.FlagSet) {
+
+	klog.Warningf("CRYER!!##X \n%s\n", debug.Stack())
+
 	f.lock.Lock()
 	// TODO(mtaufen): Shouldn't we just close it on the first Set/SetFromMap instead?
 	// Not all components expose a feature gates flag using this AddFlag method, and
