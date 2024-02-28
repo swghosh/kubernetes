@@ -30,6 +30,7 @@ github.com/cenkalti/backoff/v4 v4.2.1/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyY
 github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/chai2010/gettext-go v1.0.2/go.mod h1:y+wnP2cHYaVj19NZhYKAwEMH2CI1gNHeQQ+5AjwawxA=
 github.com/checkpoint-restore/go-criu/v5 v5.3.0/go.mod h1:E/eQpaFtUKGOOSEBZgmKAcn+zUUwWxqcaKZlF54wK8E=
+github.com/chiragkyal/library-go v0.0.0-20240209181004-6cfa61ab721d/go.mod h1:hl8bxWuFMM72N4YH7FKLGWtYhDz/A0xwvaa8Yr5fxYU=
 github.com/cilium/ebpf v0.9.1/go.mod h1:+OhNOIXx/Fnu1IE8bJz2dzOA+VSfyTfdNUVdlQnxUFY=
 github.com/container-storage-interface/spec v1.8.0/go.mod h1:ROLik+GhPslwwWRNFF1KasPzroNARibH2rfz1rkg4H0=
 github.com/containerd/cgroups v1.1.0/go.mod h1:6ppBcbh/NOOUU+dMKrykgaBnK9lCIBxHqJDGwsa1mIw=
@@ -165,7 +166,6 @@ github.com/openshift/apiserver-library-go v0.0.0-20231218150122-47b436d2f389/go.
 github.com/openshift/client-go v0.0.0-20231218155125-ff7d9f9bf415/go.mod h1:5W+xoimHjRdZ0dI/yeQR0ANRNLK9mPmXMzUWPAIPADo=
 github.com/openshift/ginkgo/v2 v2.6.1-0.20231031162821-c5e24be53ea7 h1:jUM9Fdf+fT0LTccN58jrypOyzcfQUs1v2UH6f8vdBTA=
 github.com/openshift/ginkgo/v2 v2.6.1-0.20231031162821-c5e24be53ea7/go.mod h1:TE309ZR8s5FsKKpuB1YAQYBzCaAfUgatB/xlT/ETL/o=
-github.com/openshift/library-go v0.0.0-20240207105404-126b47137408/go.mod h1:ePlaOqUiPplRc++6aYdMe+2FmXb2xTNS9Nz5laG2YmI=
 github.com/peterbourgon/diskv v2.0.1+incompatible/go.mod h1:uqqh8zWWbv1HBMNONnaR/tNboyR3/BZd58JJSHlUSCU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

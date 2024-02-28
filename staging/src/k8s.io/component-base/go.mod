@@ -84,6 +84,7 @@ require (
 
 replace (
 	github.com/onsi/ginkgo/v2 => github.com/openshift/ginkgo/v2 v2.6.1-0.20231031162821-c5e24be53ea7
+	github.com/openshift/library-go => github.com/chiragkyal/library-go v0.0.0-20240209181004-6cfa61ab721d
 	k8s.io/api => ../api
 	k8s.io/apiextensions-apiserver => ../apiextensions-apiserver
 	k8s.io/apimachinery => ../apimachinery

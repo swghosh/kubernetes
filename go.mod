@@ -118,7 +118,7 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kms v0.29.0
-	k8s.io/kube-aggregator v0.29.0
+	k8s.io/kube-aggregator v0.28.2
 	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
 	k8s.io/kube-proxy v0.0.0
@@ -258,6 +258,7 @@ require (
 
 replace (
 	github.com/onsi/ginkgo/v2 => github.com/openshift/ginkgo/v2 v2.6.1-0.20231031162821-c5e24be53ea7
+	github.com/openshift/library-go => github.com/chiragkyal/library-go v0.0.0-20240209181004-6cfa61ab721d
 	k8s.io/api => ./staging/src/k8s.io/api
 	k8s.io/apiextensions-apiserver => ./staging/src/k8s.io/apiextensions-apiserver
 	k8s.io/apimachinery => ./staging/src/k8s.io/apimachinery

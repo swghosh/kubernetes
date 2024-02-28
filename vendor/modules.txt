@@ -828,8 +828,8 @@ github.com/openshift/client-go/user/informers/externalversions/internalinterface
 github.com/openshift/client-go/user/informers/externalversions/user
 github.com/openshift/client-go/user/informers/externalversions/user/v1
 github.com/openshift/client-go/user/listers/user/v1
-# github.com/openshift/library-go v0.0.0-20240207105404-126b47137408
-## explicit; go 1.21
+# github.com/openshift/library-go v0.0.0-20240207105404-126b47137408 => github.com/chiragkyal/library-go v0.0.0-20240209181004-6cfa61ab721d
+## explicit; go 1.20
 github.com/openshift/library-go/pkg/apiserver/admission/admissionregistrationtesting
 github.com/openshift/library-go/pkg/apiserver/admission/admissionrestconfig
 github.com/openshift/library-go/pkg/apiserver/admission/admissiontimeout
@@ -853,6 +853,7 @@ github.com/openshift/library-go/pkg/network
 github.com/openshift/library-go/pkg/oauth/oauthdiscovery
 github.com/openshift/library-go/pkg/quota/clusterquotamapping
 github.com/openshift/library-go/pkg/quota/quotautil
+github.com/openshift/library-go/pkg/route
 github.com/openshift/library-go/pkg/route/defaulting
 github.com/openshift/library-go/pkg/route/hostassignment
 github.com/openshift/library-go/pkg/route/validation
@@ -2376,7 +2377,7 @@ k8s.io/kms/apis/v1beta1
 k8s.io/kms/apis/v2
 k8s.io/kms/pkg/service
 k8s.io/kms/pkg/util
-# k8s.io/kube-aggregator v0.29.0 => ./staging/src/k8s.io/kube-aggregator
+# k8s.io/kube-aggregator v0.28.2 => ./staging/src/k8s.io/kube-aggregator
 ## explicit; go 1.21
 k8s.io/kube-aggregator/pkg/apis/apiregistration
 k8s.io/kube-aggregator/pkg/apis/apiregistration/install
@@ -2799,6 +2800,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 # github.com/onsi/ginkgo/v2 => github.com/openshift/ginkgo/v2 v2.6.1-0.20231031162821-c5e24be53ea7
+# github.com/openshift/library-go => github.com/chiragkyal/library-go v0.0.0-20240209181004-6cfa61ab721d
 # k8s.io/api => ./staging/src/k8s.io/api
 # k8s.io/apiextensions-apiserver => ./staging/src/k8s.io/apiextensions-apiserver
 # k8s.io/apimachinery => ./staging/src/k8s.io/apimachinery
