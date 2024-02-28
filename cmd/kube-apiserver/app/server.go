@@ -28,8 +28,6 @@ import (
 	"os"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-	openshiftfeatures "github.com/openshift/library-go/pkg/features"
 	"k8s.io/kubernetes/openshift-kube-apiserver/admission/admissionenablement"
 	"k8s.io/kubernetes/openshift-kube-apiserver/enablement"
 	"k8s.io/kubernetes/openshift-kube-apiserver/openshiftkubeapiserver"
@@ -83,12 +81,6 @@ import (
 	eventstorage "k8s.io/kubernetes/pkg/registry/core/event/storage"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 )
-
-// OpenShiftKubeAPIServerFeatureGates contains list of feature gates that
-// will be honored by openshift-kube-apiserver
-var OpenShiftKubeAPIServerFeatureGates []configv1.FeatureGateName = []configv1.FeatureGateName{
-	configv1.FeatureGateRouteExternalCertificate,
-}
 
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
@@ -178,11 +170,6 @@ cluster's shared state through which all other components interact.`,
 
 	// openshift feature gates need to be mandatorily initialized before flag set is used
 	// feature gates
-	if err := openshiftfeatures.InitializeFeatureGates(utilfeature.DefaultMutableFeatureGate,
-		OpenShiftKubeAPIServerFeatureGates...,
-	); err != nil {
-		klog.Fatal(err)
-	}
 
 	fs := cmd.Flags()
 	namedFlagSets := s.Flags()
