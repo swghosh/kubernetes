@@ -58,7 +58,7 @@ require (
 	github.com/openshift/api v0.0.0-20240207185517-ae973131190e
 	github.com/openshift/apiserver-library-go v0.0.0-20231218150122-47b436d2f389
 	github.com/openshift/client-go v0.0.0-20231218155125-ff7d9f9bf415
-	github.com/openshift/library-go v0.0.0-20240207105404-126b47137408
+	github.com/openshift/library-go v0.0.0-20240403124533-3064fcb77c32
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.16.0
@@ -153,7 +153,6 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect

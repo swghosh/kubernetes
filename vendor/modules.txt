@@ -115,9 +115,6 @@ github.com/asaskevich/govalidator
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
-# github.com/blang/semver v3.5.1+incompatible
-## explicit
-github.com/blang/semver
 # github.com/blang/semver/v4 v4.0.0
 ## explicit; go 1.14
 github.com/blang/semver/v4
@@ -828,7 +825,7 @@ github.com/openshift/client-go/user/informers/externalversions/internalinterface
 github.com/openshift/client-go/user/informers/externalversions/user
 github.com/openshift/client-go/user/informers/externalversions/user/v1
 github.com/openshift/client-go/user/listers/user/v1
-# github.com/openshift/library-go v0.0.0-20240207105404-126b47137408
+# github.com/openshift/library-go v0.0.0-20240403124533-3064fcb77c32
 ## explicit; go 1.21
 github.com/openshift/library-go/pkg/apiserver/admission/admissionregistrationtesting
 github.com/openshift/library-go/pkg/apiserver/admission/admissionrestconfig
@@ -852,6 +849,7 @@ github.com/openshift/library-go/pkg/network
 github.com/openshift/library-go/pkg/oauth/oauthdiscovery
 github.com/openshift/library-go/pkg/quota/clusterquotamapping
 github.com/openshift/library-go/pkg/quota/quotautil
+github.com/openshift/library-go/pkg/route
 github.com/openshift/library-go/pkg/route/defaulting
 github.com/openshift/library-go/pkg/route/hostassignment
 github.com/openshift/library-go/pkg/route/validation
